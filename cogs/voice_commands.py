@@ -12,6 +12,25 @@ class VoiceCommands(Cog):
     
     def __init__(self, bot):
         self.bot = bot
+        # Get FFmpeg path from config or use default paths
+        self.ffmpeg_path = Config.FFMPEG_PATH or self._get_ffmpeg_path()
+
+    def _get_ffmpeg_path(self):
+        """Try to find FFmpeg in common locations"""
+        common_paths = [
+            r"C:\ffmpeg\bin\ffmpeg.exe",  # Windows custom install
+            r"C:\Program Files\ffmpeg\bin\ffmpeg.exe",  # Windows program files
+            r"C:\Program Files (x86)\ffmpeg\bin\ffmpeg.exe",  # Windows program files (x86)
+            "ffmpeg"  # System PATH
+        ]
+        
+        for path in common_paths:
+            if os.path.isfile(path):
+                return path
+            elif os.path.isfile(path + ".exe"):  # Check with .exe extension
+                return path + ".exe"
+        
+        return "ffmpeg"  # Default to system PATH as last resort
 
     async def cog_check(self, ctx):
         """Check if user has required permissions for any command in this cog"""
@@ -39,7 +58,10 @@ class VoiceCommands(Cog):
 
             # Play the welcome sound
             if os.path.exists(Config.WELCOME_SOUND_PATH):
-                audio_source = discord.FFmpegPCMAudio(Config.WELCOME_SOUND_PATH)
+                audio_source = discord.FFmpegPCMAudio(
+                    Config.WELCOME_SOUND_PATH,
+                    executable=self.ffmpeg_path
+                )
                 transformed_source = discord.PCMVolumeTransformer(audio_source, volume=Config.DEFAULT_VOLUME)
                 
                 if not voice_client.is_playing():
@@ -56,12 +78,20 @@ class VoiceCommands(Cog):
     @cooldown(1, Config.SOUND_COMMAND_COOLDOWN, BucketType.guild)
     async def testsound(self, ctx):
         """Test the welcome sound"""
-        await ctx.send("*جاري تشغيل صوت الترحيب...*")
         try:
+            # Log FFmpeg path being used
+            logger.info(f"Using FFmpeg path: {self.ffmpeg_path}")
+            
+            # Verify FFmpeg exists
+            if not os.path.isfile(self.ffmpeg_path) and self.ffmpeg_path != "ffmpeg":
+                await ctx.send("*خطأ: لم يتم العثور على FFmpeg. يرجى التحقق من التثبيت.*")
+                return
+
+            await ctx.send("*جاري تشغيل صوت الترحيب...*")
             await self.on_member_join(ctx.author)
         except Exception as e:
             logger.error(f"Error testing welcome sound: {str(e)}")
-            await ctx.send("*حدث خطأ أثناء تشغيل الصوت.*")
+            await ctx.send(f"*حدث خطأ أثناء تشغيل الصوت: {str(e)}*")
 
     @commands.command()
     @commands.has_permissions(administrator=True)
@@ -98,7 +128,7 @@ class VoiceCommands(Cog):
         elif isinstance(error, commands.BadArgument):
             await ctx.send('*يرجى إدخال رقم صحيح بين 0.0 و 1.0*')
         else:
-            logger.error(f"Unexpected error in voice command: {str(error)}")
+            logger.error(f"Unexpected error in voice command: {str(e)}")
             await ctx.send('*حدث خطأ غير متوقع.*')
 
 async def setup(bot):

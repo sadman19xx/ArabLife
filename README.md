@@ -2,144 +2,171 @@
 
 ## Quick Start Guide
 
-1. **Download the Files**
-   - Download all these files:
-     ```
-     bot.py
-     config.py
-     utils/logger.py
-     cogs/role_commands.py
-     cogs/voice_commands.py
-     cogs/status_commands.py
-     ```
-   - Keep the same folder structure:
-     ```
-     ArabLife/
-     ├── bot.py
-     ├── config.py
-     ├── utils/
-     │   └── logger.py
-     └── cogs/
-         ├── role_commands.py
-         ├── voice_commands.py
-         └── status_commands.py
-     ```
+### 1. Install FFmpeg (MOST IMPORTANT - DO THIS FIRST)
 
-2. **Install Python**
-   - Download Python from [python.org](https://python.org)
-   - During installation, check "Add Python to PATH"
-   - Verify installation by opening cmd and typing: `python --version`
+**Simple FFmpeg Installation:**
+1. Download FFmpeg:
+   - Go to [BtbN/FFmpeg-Builds](https://github.com/BtbN/FFmpeg-Builds/releases)
+   - Download `ffmpeg-master-latest-win64-gpl.zip`
 
-3. **Install FFmpeg**
-   - Download FFmpeg from [ffmpeg.org](https://ffmpeg.org/download.html)
-   - Extract the files
-   - Copy the path to the bin folder (e.g., `C:\ffmpeg\bin`)
-   - Add to PATH:
-     1. Search "Environment Variables" in Windows
-     2. Click "Environment Variables"
-     3. Under "System Variables" find "Path"
-     4. Click "Edit" → "New"
-     5. Paste the FFmpeg bin path
-     6. Click "OK" on all windows
+2. Set up FFmpeg:
+   - Extract the zip file
+   - Inside the extracted folder, find the `bin` folder
+   - Copy these 3 files from the `bin` folder:
+     - `ffmpeg.exe`
+     - `ffplay.exe`
+     - `ffprobe.exe`
+   - Create a new folder: `C:\ffmpeg`
+   - Paste the 3 files directly in `C:\ffmpeg`
 
-4. **Install Bot Dependencies**
-   - Open cmd in your bot folder
-   - Run these commands:
-     ```bash
-     pip install discord.py[voice] python-dotenv PyNaCl
-     ```
+3. Add to System PATH:
+   - Press Windows key + X
+   - Click "System"
+   - Click "Advanced system settings"
+   - Click "Environment Variables"
+   - Under "System Variables", find "Path"
+   - Click "Edit"
+   - Click "New"
+   - Type: `C:\ffmpeg`
+   - Click "OK" on all windows
+   - **RESTART YOUR COMPUTER**
 
-5. **Create .env File**
-   - Create a new file named `.env` in your bot folder
-   - Copy this template:
-     ```
-     TOKEN=your_bot_token
-     GUILD_ID=your_guild_id
-     ROLE_IDS_ALLOWED=role_id1,role_id2,role_id3
-     ROLE_ID_TO_GIVE=role_id_to_give
-     ROLE_ID_REMOVE_ALLOWED=role_id_for_remove_command
-     ROLE_ACTIVITY_LOG_CHANNEL_ID=log_channel_id
-     AUDIT_LOG_CHANNEL_ID=audit_channel_id
-     VISA_IMAGE_URL=your_visa_image_url
-     ```
-   - Replace values with your Discord IDs:
-     - To get IDs, enable Developer Mode in Discord:
-       1. Settings → App Settings → Advanced
-       2. Turn on Developer Mode
-     - Right-click on roles/channels and click "Copy ID"
+4. Test FFmpeg:
+   - After restarting, open Command Prompt
+   - Type: `ffmpeg -version`
+   - Should see FFmpeg version information
 
-6. **Add Welcome Sound**
-   - Put your welcome sound file in the bot folder
-   - Name it `welcome.mp3`
-   - Or if using a different name, add to .env:
-     ```
-     WELCOME_SOUND_PATH=your_sound_file.mp3
-     ```
+### 2. Install Python
+- Download Python 3.8 or higher from [python.org](https://python.org)
+- During installation, CHECK "Add Python to PATH"
+- Open cmd and type `python --version` to verify
 
-7. **Add Visa Image**
-   1. Upload your visa image to imgur.com
-   2. Copy the direct image URL (right-click image → Copy image address)
-   3. Add to .env:
-      ```
-      VISA_IMAGE_URL=your_copied_image_url
-      ```
+### 3. Install Bot Dependencies
+- Open cmd in your bot folder
+- Run this command:
+```bash
+pip install discord.py[voice] python-dotenv PyNaCl
+```
 
-8. **Start the Bot**
-   - Open cmd in your bot folder
-   - Type this command:
-     ```
-     python bot.py
-     ```
-   - You should see "Logged in as [bot name]"
+### 4. Set Up Bot Files
+1. Download these files:
+```
+bot.py
+config.py
+utils/logger.py
+cogs/role_commands.py
+cogs/voice_commands.py
+cogs/status_commands.py
+cogs/help_commands.py
+```
 
-## Testing Commands
+2. Keep this folder structure:
+```
+ArabLife/
+├── bot.py
+├── config.py
+├── utils/
+│   └── logger.py
+└── cogs/
+    ├── role_commands.py
+    ├── voice_commands.py
+    ├── status_commands.py
+    └── help_commands.py
+```
 
-1. **Test Visa DM System**
-   - Use command: `/test_visa_dm`
-   - Bot will send you both the granted and revoked visa messages
-   - Verify the image appears correctly
+### 5. Create .env File
+Create a file named `.env` in your bot folder:
+```env
+# Required Settings
+TOKEN=your_bot_token
+GUILD_ID=your_guild_id
+ROLE_IDS_ALLOWED=role_id1,role_id2,role_id3
+ROLE_ID_TO_GIVE=role_id_to_give
+ROLE_ID_REMOVE_ALLOWED=role_id_for_remove_command
+ROLE_ACTIVITY_LOG_CHANNEL_ID=log_channel_id
+AUDIT_LOG_CHANNEL_ID=audit_channel_id
+VISA_IMAGE_URL=your_visa_image_url
 
-2. **Test Role Commands**
-   - `/مقبول @user` - Give role and send visa granted DM
-   - `/مرفوض @user` - Remove role and send visa revoked DM
+# FFmpeg Settings (IMPORTANT)
+FFMPEG_PATH=C:\ffmpeg\ffmpeg.exe
 
-3. **Test Sound System**
-   - `/testsound` - Test welcome sound
-   - `/volume 0.5` - Adjust volume (0.0 to 1.0)
+# Optional Settings
+WELCOME_SOUND_PATH=welcome.mp3
+DEFAULT_VOLUME=0.5
+```
 
-4. **Help Command**
-   - Type `/help` to see all available commands
+### 6. Add Welcome Sound
+- Put `welcome.mp3` in your bot folder
+- Or use a different name and update WELCOME_SOUND_PATH in .env
+
+### 7. Add Visa Image
+1. Upload image to imgur.com
+2. Right-click → Copy image address
+3. Add to .env as VISA_IMAGE_URL
+
+### 8. Start the Bot
+```bash
+python bot.py
+```
+
+## Testing
+
+### 1. Test FFmpeg First
+1. Open new Command Prompt
+2. Type: `ffmpeg -version`
+3. If you see an error:
+   - Double-check PATH setup
+   - Make sure you restarted your computer
+   - Verify files are in C:\ffmpeg
+   - Try full path: `C:\ffmpeg\ffmpeg -version`
+
+### 2. Test Bot Commands
+1. Voice Test:
+   - Join a voice channel
+   - Type `/testsound`
+   - Should hear welcome sound
+
+2. Role Commands:
+   - `/مقبول @user` - Give role
+   - `/مرفوض @user` - Remove role
+
+3. Help Command:
+   - Type `/help`
 
 ## Common Problems
 
-1. **"python not recognized"**
-   - Reinstall Python and check "Add Python to PATH"
-   - Or add Python to PATH manually
+### FFmpeg Issues
+If `ffmpeg -version` doesn't work:
+1. Open Command Prompt as Administrator
+2. Run these commands:
+```cmd
+setx PATH "%PATH%;C:\ffmpeg"
+```
+3. Restart your computer
+4. Try `ffmpeg -version` again
 
-2. **"No module named discord/PyNaCl"**
-   - Run: `pip install discord.py[voice] python-dotenv PyNaCl`
+If still not working:
+1. Delete C:\ffmpeg folder
+2. Follow installation steps again
+3. Make sure you copy ONLY the 3 .exe files
+4. Restart computer
 
-3. **"No such file .env"**
-   - Make sure you created the .env file
-   - Make sure it's in the same folder as bot.py
+### No Sound Playing
+1. Check FFmpeg:
+```cmd
+C:\ffmpeg\ffmpeg -version
+```
+2. Update .env:
+```env
+FFMPEG_PATH=C:\ffmpeg\ffmpeg.exe
+```
+3. Verify welcome.mp3 exists
+4. Restart bot
 
-4. **"FFmpeg not found"**
-   - Make sure you added FFmpeg to PATH
-   - Try restarting your computer
+### Other Issues
+- Make sure all dependencies are installed
+- Check bot permissions in Discord
+- Verify all IDs in .env
+- Check log channels for errors
 
-5. **"Image not showing in DM"**
-   - Verify VISA_IMAGE_URL in .env is correct
-   - Make sure it's a direct image URL (ends with .jpg, .png, etc.)
-   - Test the URL in a browser to ensure it works
-
-6. **"Voice not working"**
-   - Make sure you installed PyNaCl: `pip install PyNaCl`
-   - Verify FFmpeg is installed correctly
-   - Check bot's voice channel permissions
-
-7. **Bot not responding**
-   - Check if your TOKEN is correct
-   - Make sure all IDs in .env are correct
-   - Check if bot has correct permissions in Discord
-
-Need more help? Check the [Discord.py Documentation](https://discordpy.readthedocs.io/)
+Need help? [Discord.py Voice Guide](https://discordpy.readthedocs.io/en/stable/api.html#voice)

@@ -22,6 +22,7 @@ class Config:
     # Voice settings
     WELCOME_SOUND_PATH = os.getenv('WELCOME_SOUND_PATH', 'welcome.mp3')
     DEFAULT_VOLUME = float(os.getenv('DEFAULT_VOLUME', '0.5'))
+    FFMPEG_PATH = os.getenv('FFMPEG_PATH', None)  # Optional custom FFmpeg path
     
     # Command cooldowns (in seconds)
     ROLE_COMMAND_COOLDOWN = int(os.getenv('ROLE_COMMAND_COOLDOWN', '5'))
@@ -55,3 +56,11 @@ class Config:
             
         if not cls.ROLE_IDS_ALLOWED:
             raise ValueError("At least one allowed role ID must be configured")
+
+        # Validate FFmpeg if path is provided
+        if cls.FFMPEG_PATH and not os.path.isfile(cls.FFMPEG_PATH):
+            raise ValueError(f"FFmpeg not found at specified path: {cls.FFMPEG_PATH}")
+
+        # Validate welcome sound file
+        if not os.path.isfile(cls.WELCOME_SOUND_PATH):
+            raise ValueError(f"Welcome sound file not found at: {cls.WELCOME_SOUND_PATH}")
