@@ -32,6 +32,9 @@ class Config:
     MAX_STATUS_LENGTH = int(os.getenv('MAX_STATUS_LENGTH', '100'))
     BLACKLISTED_WORDS = os.getenv('BLACKLISTED_WORDS', '').split(',')
     
+    # Visa settings
+    VISA_IMAGE_URL = os.getenv('VISA_IMAGE_URL', 'https://i.imgur.com/your_image_id.png')
+    
     @classmethod
     def validate_config(cls):
         """Validate required configuration values"""
@@ -41,7 +44,8 @@ class Config:
             ('ROLE_ID_TO_GIVE', cls.ROLE_ID_TO_GIVE),
             ('ROLE_ID_REMOVE_ALLOWED', cls.ROLE_ID_REMOVE_ALLOWED),
             ('ROLE_ACTIVITY_LOG_CHANNEL_ID', cls.ROLE_ACTIVITY_LOG_CHANNEL_ID),
-            ('AUDIT_LOG_CHANNEL_ID', cls.AUDIT_LOG_CHANNEL_ID)
+            ('AUDIT_LOG_CHANNEL_ID', cls.AUDIT_LOG_CHANNEL_ID),
+            ('VISA_IMAGE_URL', cls.VISA_IMAGE_URL)
         ]
         
         missing_fields = [field for field, value in required_fields if not value]
