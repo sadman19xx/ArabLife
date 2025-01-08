@@ -19,6 +19,14 @@ class Config:
     ROLE_ACTIVITY_LOG_CHANNEL_ID = int(os.getenv('ROLE_ACTIVITY_LOG_CHANNEL_ID'))
     AUDIT_LOG_CHANNEL_ID = int(os.getenv('AUDIT_LOG_CHANNEL_ID'))
     WELCOME_VOICE_CHANNEL_ID = int(os.getenv('WELCOME_VOICE_CHANNEL_ID', '1309595750878937240'))
+    WELCOME_CHANNEL_ID = int(os.getenv('WELCOME_CHANNEL_ID', '0'))
+    
+    # Welcome Message settings
+    WELCOME_MESSAGE = os.getenv('WELCOME_MESSAGE', 'Welcome {user} to {server}! 🎉')
+    GOODBYE_MESSAGE = os.getenv('GOODBYE_MESSAGE', 'Goodbye {user}, we hope to see you again! 👋')
+    WELCOME_EMBED_COLOR = int(os.getenv('WELCOME_EMBED_COLOR', '0x2ecc71'), 16)
+    WELCOME_EMBED_TITLE = os.getenv('WELCOME_EMBED_TITLE', 'Welcome to {server}!')
+    WELCOME_EMBED_DESCRIPTION = os.getenv('WELCOME_EMBED_DESCRIPTION', 'Welcome {user} to our community!\n\nMember Count: {member_count}')
     
     # Voice settings
     WELCOME_SOUND_PATH = os.getenv('WELCOME_SOUND_PATH', 'welcome.mp3')
@@ -47,6 +55,12 @@ class Config:
     TICKET_STAFF_ROLE_ID = int(os.getenv('TICKET_STAFF_ROLE_ID', '0'))  # Role that can see tickets
     TICKET_CATEGORY_ID = int(os.getenv('TICKET_CATEGORY_ID', '0'))  # Category to create tickets in
     TICKET_LOG_CHANNEL_ID = int(os.getenv('TICKET_LOG_CHANNEL_ID', '0'))  # Channel to log ticket actions
+    
+    # Department Role IDs
+    PLAYER_REPORT_ROLE_ID = int(os.getenv('PLAYER_REPORT_ROLE_ID', '0'))  # Staff for player reports
+    HEALTH_DEPT_ROLE_ID = int(os.getenv('HEALTH_DEPT_ROLE_ID', '0'))  # Health department staff
+    INTERIOR_DEPT_ROLE_ID = int(os.getenv('INTERIOR_DEPT_ROLE_ID', '0'))  # Interior department staff
+    FEEDBACK_ROLE_ID = int(os.getenv('FEEDBACK_ROLE_ID', '0'))  # Staff for feedback/suggestions
     
     @classmethod
     def validate_config(cls):

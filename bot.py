@@ -22,7 +22,8 @@ class ArabLifeBot(commands.Bot):
             'cogs.voice_commands',
             'cogs.status_commands',
             'cogs.help_commands',
-            'cogs.ticket_commands'
+            'cogs.ticket_commands',
+            'cogs.welcome_commands'
         ]
         
     async def setup_hook(self):
