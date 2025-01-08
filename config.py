@@ -33,9 +33,20 @@ class Config:
     # Security settings
     MAX_STATUS_LENGTH = int(os.getenv('MAX_STATUS_LENGTH', '100'))
     BLACKLISTED_WORDS = os.getenv('BLACKLISTED_WORDS', '').split(',')
+    MAX_MENTIONS = int(os.getenv('MAX_MENTIONS', '5'))
+    RAID_PROTECTION = os.getenv('RAID_PROTECTION', 'true').lower() == 'true'
+    MIN_ACCOUNT_AGE = int(os.getenv('MIN_ACCOUNT_AGE', '7'))  # days
+    ALLOWED_DOMAINS = os.getenv('ALLOWED_DOMAINS', 'discord.com,discord.gg').split(',')
+    SPAM_DETECTION = os.getenv('SPAM_DETECTION', 'true').lower() == 'true'
+    AUTO_TIMEOUT_DURATION = int(os.getenv('AUTO_TIMEOUT_DURATION', '3600'))  # seconds
     
     # Visa settings
     VISA_IMAGE_URL = os.getenv('VISA_IMAGE_URL', 'https://i.imgur.com/your_image_id.png')
+    
+    # Ticket settings
+    TICKET_STAFF_ROLE_ID = int(os.getenv('TICKET_STAFF_ROLE_ID', '0'))  # Role that can see tickets
+    TICKET_CATEGORY_ID = int(os.getenv('TICKET_CATEGORY_ID', '0'))  # Category to create tickets in
+    TICKET_LOG_CHANNEL_ID = int(os.getenv('TICKET_LOG_CHANNEL_ID', '0'))  # Channel to log ticket actions
     
     @classmethod
     def validate_config(cls):
@@ -65,3 +76,10 @@ class Config:
         # Validate welcome sound file
         if not os.path.isfile(cls.WELCOME_SOUND_PATH):
             raise ValueError(f"Welcome sound file not found at: {cls.WELCOME_SOUND_PATH}")
+
+        # Validate ticket settings if staff role is set
+        if cls.TICKET_STAFF_ROLE_ID != 0:
+            if cls.TICKET_CATEGORY_ID == 0:
+                raise ValueError("Ticket category ID must be set if using ticket system")
+            if cls.TICKET_LOG_CHANNEL_ID == 0:
+                raise ValueError("Ticket log channel ID must be set if using ticket system")

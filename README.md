@@ -1,172 +1,105 @@
-# How to Start ArabLife Bot
+Fahad, a beacon shining bright,
+Strength and kindness in your light.
+```
+
+# ArabLife Bot
+*Developed by Fahad and Sadman*
 
 ## Quick Start Guide
+Follow the [Basic Setup Guide](README_BASIC.md) first for Python, FFmpeg, and core bot setup.
 
-### 1. Install FFmpeg (MOST IMPORTANT - DO THIS FIRST)
+## Security Features
 
-**Simple FFmpeg Installation:**
-1. Download FFmpeg:
-   - Go to [BtbN/FFmpeg-Builds](https://github.com/BtbN/FFmpeg-Builds/releases)
-   - Download `ffmpeg-master-latest-win64-gpl.zip`
+1. **Anti-Raid Protection**
+   - Automatic raid detection (10 joins/30 seconds)
+   - Auto-enables highest verification level
+   - Auto-disables after 10 minutes
+   - New account detection (< 7 days)
 
-2. Set up FFmpeg:
-   - Extract the zip file
-   - Inside the extracted folder, find the `bin` folder
-   - Copy these 3 files from the `bin` folder:
-     - `ffmpeg.exe`
-     - `ffplay.exe`
-     - `ffprobe.exe`
-   - Create a new folder: `C:\ffmpeg`
-   - Paste the 3 files directly in `C:\ffmpeg`
+2. **Spam Detection**
+   - Message frequency monitoring
+   - Similar message detection
+   - Mass mention protection
+   - Configurable thresholds
+   - Automatic warnings
 
-3. Add to System PATH:
-   - Press Windows key + X
-   - Click "System"
-   - Click "Advanced system settings"
-   - Click "Environment Variables"
-   - Under "System Variables", find "Path"
-   - Click "Edit"
-   - Click "New"
-   - Type: `C:\ffmpeg`
-   - Click "OK" on all windows
-   - **RESTART YOUR COMPUTER**
+3. **Link Control**
+   - Configurable allowed domains
+   - Discord invite filtering
+   - URL scanning
+   - Automatic removal
 
-4. Test FFmpeg:
-   - After restarting, open Command Prompt
-   - Type: `ffmpeg -version`
-   - Should see FFmpeg version information
+4. **Warning System**
+   - Progressive warnings
+   - Automatic timeouts
+   - Warning history
+   - Admin commands:
+     - `/warnings @user` - Check warnings
+     - `/clearwarnings @user` - Clear warnings
 
-### 2. Install Python
-- Download Python 3.8 or higher from [python.org](https://python.org)
-- During installation, CHECK "Add Python to PATH"
-- Open cmd and type `python --version` to verify
-
-### 3. Install Bot Dependencies
-- Open cmd in your bot folder
-- Run this command:
-```bash
-pip install discord.py[voice] python-dotenv PyNaCl
-```
-
-### 4. Set Up Bot Files
-1. Download these files:
-```
-bot.py
-config.py
-utils/logger.py
-cogs/role_commands.py
-cogs/voice_commands.py
-cogs/status_commands.py
-cogs/help_commands.py
-```
-
-2. Keep this folder structure:
-```
-ArabLife/
-├── bot.py
-├── config.py
-├── utils/
-│   └── logger.py
-└── cogs/
-    ├── role_commands.py
-    ├── voice_commands.py
-    ├── status_commands.py
-    └── help_commands.py
-```
-
-### 5. Create .env File
-Create a file named `.env` in your bot folder:
+5. **Configurable Settings**
 ```env
-# Required Settings
-TOKEN=your_bot_token
-GUILD_ID=your_guild_id
-ROLE_IDS_ALLOWED=role_id1,role_id2,role_id3
-ROLE_ID_TO_GIVE=role_id_to_give
-ROLE_ID_REMOVE_ALLOWED=role_id_for_remove_command
-ROLE_ACTIVITY_LOG_CHANNEL_ID=log_channel_id
-AUDIT_LOG_CHANNEL_ID=audit_channel_id
-VISA_IMAGE_URL=your_visa_image_url
-
-# FFmpeg Settings (IMPORTANT)
-FFMPEG_PATH=C:\ffmpeg\ffmpeg.exe
-
-# Optional Settings
-WELCOME_SOUND_PATH=welcome.mp3
-DEFAULT_VOLUME=0.5
+# Security Settings
+MAX_MENTIONS=5
+RAID_PROTECTION=true
+MIN_ACCOUNT_AGE=7
+ALLOWED_DOMAINS=discord.com,discord.gg
+SPAM_DETECTION=true
+AUTO_TIMEOUT_DURATION=3600
+BLACKLISTED_WORDS=word1,word2,word3
 ```
 
-### 6. Add Welcome Sound
-- Put `welcome.mp3` in your bot folder
-- Or use a different name and update WELCOME_SOUND_PATH in .env
+## Other Features
 
-### 7. Add Visa Image
-1. Upload image to imgur.com
-2. Right-click → Copy image address
-3. Add to .env as VISA_IMAGE_URL
+### Role Management
+- `/مقبول @user` - Give role
+- `/مرفوض @user` - Remove role
 
-### 8. Start the Bot
-```bash
-python bot.py
-```
+### Voice System
+- `/testsound` - Test welcome sound
+- `/volume 0.5` - Adjust volume
 
-## Testing
+### Ticket System
+- `/setup-tickets` - Create ticket panel
+- `/close` - Close current ticket
 
-### 1. Test FFmpeg First
-1. Open new Command Prompt
-2. Type: `ffmpeg -version`
-3. If you see an error:
-   - Double-check PATH setup
-   - Make sure you restarted your computer
-   - Verify files are in C:\ffmpeg
-   - Try full path: `C:\ffmpeg\ffmpeg -version`
+### Help
+- `/help` - Show all commands
 
-### 2. Test Bot Commands
-1. Voice Test:
-   - Join a voice channel
-   - Type `/testsound`
-   - Should hear welcome sound
+## Logging
 
-2. Role Commands:
-   - `/مقبول @user` - Give role
-   - `/مرفوض @user` - Remove role
+All security events are logged to your audit channel:
+- Raid detections
+- Spam warnings
+- Link removals
+- User timeouts
+- Warning changes
 
-3. Help Command:
-   - Type `/help`
+## Security Best Practices
 
-## Common Problems
+1. **Server Settings**
+   - Enable 2FA requirement for moderation
+   - Set up role hierarchy properly
+   - Configure verification level
+   - Set up explicit content filter
 
-### FFmpeg Issues
-If `ffmpeg -version` doesn't work:
-1. Open Command Prompt as Administrator
-2. Run these commands:
-```cmd
-setx PATH "%PATH%;C:\ffmpeg"
-```
-3. Restart your computer
-4. Try `ffmpeg -version` again
+2. **Bot Permissions**
+   - Use minimal required permissions
+   - Set up proper role hierarchy
+   - Configure audit logging
+   - Enable member intents
 
-If still not working:
-1. Delete C:\ffmpeg folder
-2. Follow installation steps again
-3. Make sure you copy ONLY the 3 .exe files
-4. Restart computer
+3. **Monitoring**
+   - Check audit logs regularly
+   - Review warning patterns
+   - Monitor raid attempts
+   - Track spam incidents
 
-### No Sound Playing
-1. Check FFmpeg:
-```cmd
-C:\ffmpeg\ffmpeg -version
-```
-2. Update .env:
-```env
-FFMPEG_PATH=C:\ffmpeg\ffmpeg.exe
-```
-3. Verify welcome.mp3 exists
-4. Restart bot
+4. **Maintenance**
+   - Update allowed domains regularly
+   - Review blacklisted words
+   - Adjust thresholds as needed
+   - Clear old warnings periodically
 
-### Other Issues
-- Make sure all dependencies are installed
-- Check bot permissions in Discord
-- Verify all IDs in .env
-- Check log channels for errors
-
-Need help? [Discord.py Voice Guide](https://discordpy.readthedocs.io/en/stable/api.html#voice)
+---
+*Bot developed and maintained by Fahad and Sadman*

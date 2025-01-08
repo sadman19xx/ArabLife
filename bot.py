@@ -21,7 +21,8 @@ class ArabLifeBot(commands.Bot):
             'cogs.role_commands',
             'cogs.voice_commands',
             'cogs.status_commands',
-            'cogs.help_commands'  # Added help commands cog
+            'cogs.help_commands',
+            'cogs.ticket_commands'
         ]
         
     async def setup_hook(self):
@@ -33,6 +34,11 @@ class ArabLifeBot(commands.Bot):
                 print(f'Loaded extension: {extension}')
             except Exception as e:
                 print(f'Failed to load extension {extension}: {str(e)}')
+
+        # Register persistent views for tickets
+        from cogs.ticket_commands import TicketView, StaffView
+        self.add_view(TicketView())
+        self.add_view(StaffView())
 
     async def on_ready(self):
         """Event triggered when the bot is ready"""
