@@ -20,7 +20,8 @@ class ArabLifeBot(commands.Bot):
         self.initial_extensions = [
             'cogs.role_commands',
             'cogs.voice_commands',
-            'cogs.status_commands'
+            'cogs.status_commands',
+            'cogs.help_commands'  # Added help commands cog
         ]
         
     async def setup_hook(self):
@@ -47,6 +48,7 @@ class ArabLifeBot(commands.Bot):
         # Sync commands for the specific guild
         try:
             guild = discord.Object(id=Config.GUILD_ID)
+            self.tree.copy_global_to(guild=guild)  # Copy global commands to guild
             await self.tree.sync(guild=guild)
             
             guild_object = self.get_guild(Config.GUILD_ID)

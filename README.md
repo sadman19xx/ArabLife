@@ -44,9 +44,9 @@
 
 4. **Install Bot Dependencies**
    - Open cmd in your bot folder
-   - Run this command:
-     ```
-     pip install discord.py python-dotenv
+   - Run these commands:
+     ```bash
+     pip install discord.py[voice] python-dotenv PyNaCl
      ```
 
 5. **Create .env File**
@@ -107,14 +107,17 @@
    - `/testsound` - Test welcome sound
    - `/volume 0.5` - Adjust volume (0.0 to 1.0)
 
+4. **Help Command**
+   - Type `/help` to see all available commands
+
 ## Common Problems
 
 1. **"python not recognized"**
    - Reinstall Python and check "Add Python to PATH"
    - Or add Python to PATH manually
 
-2. **"No module named discord"**
-   - Run: `pip install discord.py python-dotenv`
+2. **"No module named discord/PyNaCl"**
+   - Run: `pip install discord.py[voice] python-dotenv PyNaCl`
 
 3. **"No such file .env"**
    - Make sure you created the .env file
@@ -129,7 +132,12 @@
    - Make sure it's a direct image URL (ends with .jpg, .png, etc.)
    - Test the URL in a browser to ensure it works
 
-6. **Bot not responding**
+6. **"Voice not working"**
+   - Make sure you installed PyNaCl: `pip install PyNaCl`
+   - Verify FFmpeg is installed correctly
+   - Check bot's voice channel permissions
+
+7. **Bot not responding**
    - Check if your TOKEN is correct
    - Make sure all IDs in .env are correct
    - Check if bot has correct permissions in Discord
