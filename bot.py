@@ -91,8 +91,11 @@ async def main():
     try:
         Config.validate_config()
     except ValueError as e:
-        print(f"Configuration error: {str(e)}")
-        return
+        if "Welcome sound file not found" in str(e):
+            print(f"Warning: {str(e)}")
+        else:
+            print(f"Configuration error: {str(e)}")
+            return
 
     # Create and run bot
     try:
