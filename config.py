@@ -104,9 +104,9 @@ class Config:
         if cls.FFMPEG_PATH and not os.path.isfile(cls.FFMPEG_PATH):
             raise ValueError(f"FFmpeg not found at specified path: {cls.FFMPEG_PATH}")
 
-        # Validate welcome sound file
-        if not os.path.isfile(cls.WELCOME_SOUND_PATH):
-            raise ValueError(f"Welcome sound file not found at: {cls.WELCOME_SOUND_PATH}")
+        # Validate welcome sound file (optional)
+        if cls.WELCOME_SOUND_PATH and not os.path.isfile(cls.WELCOME_SOUND_PATH):
+            print(f"Warning: Welcome sound file not found at: {cls.WELCOME_SOUND_PATH}")
 
         # Validate ticket settings if staff role is set
         if cls.TICKET_STAFF_ROLE_ID != 0:
