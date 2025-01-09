@@ -22,6 +22,7 @@ class Config:
     WELCOME_CHANNEL_ID = int(os.getenv('WELCOME_CHANNEL_ID', '0'))
     
     # Welcome Message settings
+    WELCOME_BACKGROUND_URL = os.getenv('WELCOME_BACKGROUND_URL', 'https://i.imgur.com/your_background.png')
     WELCOME_MESSAGE = os.getenv('WELCOME_MESSAGE', 'Welcome {user} to {server}! 🎉')
     GOODBYE_MESSAGE = os.getenv('GOODBYE_MESSAGE', 'Goodbye {user}, we hope to see you again! 👋')
     WELCOME_EMBED_COLOR = int(os.getenv('WELCOME_EMBED_COLOR', '0x2ecc71'), 16)
@@ -47,6 +48,22 @@ class Config:
     ALLOWED_DOMAINS = os.getenv('ALLOWED_DOMAINS', 'discord.com,discord.gg').split(',')
     SPAM_DETECTION = os.getenv('SPAM_DETECTION', 'true').lower() == 'true'
     AUTO_TIMEOUT_DURATION = int(os.getenv('AUTO_TIMEOUT_DURATION', '3600'))  # seconds
+    
+    # AutoMod settings
+    AUTOMOD_ENABLED = os.getenv('AUTOMOD_ENABLED', 'true').lower() == 'true'
+    AUTOMOD_SPAM_THRESHOLD = int(os.getenv('AUTOMOD_SPAM_THRESHOLD', '5'))
+    AUTOMOD_SPAM_INTERVAL = int(os.getenv('AUTOMOD_SPAM_INTERVAL', '5'))
+    AUTOMOD_RAID_THRESHOLD = int(os.getenv('AUTOMOD_RAID_THRESHOLD', '10'))
+    AUTOMOD_RAID_INTERVAL = int(os.getenv('AUTOMOD_RAID_INTERVAL', '30'))
+    AUTOMOD_ACTION = os.getenv('AUTOMOD_ACTION', 'warn')  # warn, mute, kick, ban
+    
+    # Leveling settings
+    LEVELING_ENABLED = os.getenv('LEVELING_ENABLED', 'true').lower() == 'true'
+    XP_PER_MESSAGE = int(os.getenv('XP_PER_MESSAGE', '15'))
+    XP_COOLDOWN = int(os.getenv('XP_COOLDOWN', '60'))
+    LEVEL_UP_CHANNEL_ID = os.getenv('LEVEL_UP_CHANNEL_ID')
+    LEVEL_UP_MESSAGE = os.getenv('LEVEL_UP_MESSAGE', 'Congratulations {user}! You reached level {level}!')
+    ROLE_REWARDS = os.getenv('ROLE_REWARDS', '[]')  # JSON string of {level: role_id} pairs
     
     # Visa settings
     VISA_IMAGE_URL = os.getenv('VISA_IMAGE_URL', 'https://i.imgur.com/your_image_id.png')

@@ -203,22 +203,69 @@ class TicketCommands(Cog):
             }
             cog.save_tickets()
 
-            # Get department role
+            # Get department role and ticket number
             dept_role = interaction.guild.get_role(ticket_info['role_id'])
             dept_mention = dept_role.mention if dept_role else "فريق الدعم"
+            ticket_number = len(cog.active_tickets) + 1
             
-            # Send initial message
-            embed = discord.Embed(
-                description=(
-                    f"حياك يا {interaction.user.mention}!\n"
-                    f"الرد على: سيقوم أحد من {dept_mention} بالرد على التذكرة في أسرع وقت ممكن"
-                ),
-                color=ticket_info['color']
+            # Create welcome embed
+            embed = discord.Embed(color=ticket_info['color'])
+            
+            # Set author with ticket info
+            embed.set_author(
+                name=f"تذكرة جديدة • #{ticket_number}",
+                icon_url=interaction.guild.icon.url if interaction.guild.icon else None
             )
-            embed.set_author(name=f"تذكرة {ticket_info['name']}", icon_url=interaction.guild.icon.url if interaction.guild.icon else None)
+            
+            # Add ticket information fields
+            embed.add_field(
+                name="صاحب التذكرة",
+                value=interaction.user.mention,
+                inline=True
+            )
+            embed.add_field(
+                name="القسم",
+                value=f"{ticket_info['emoji']} {ticket_info['name']}",
+                inline=True
+            )
+            embed.add_field(
+                name="الحالة",
+                value="🟢 مفتوحة",
+                inline=True
+            )
+            
+            # Add response time field
+            embed.add_field(
+                name="وقت الرد المتوقع",
+                value="خلال 24 ساعة",
+                inline=False
+            )
+            
+            # Add instructions
+            embed.add_field(
+                name="تعليمات",
+                value=(
+                    "• يرجى وصف مشكلتك بالتفصيل\n"
+                    "• اذكر جميع المعلومات المهمة\n"
+                    "• كن محترماً ومتعاوناً مع فريق الدعم"
+                ),
+                inline=False
+            )
+            
+            # Set footer with timestamp
+            embed.set_footer(
+                text=interaction.guild.name,
+                icon_url=interaction.guild.icon.url if interaction.guild.icon else None
+            )
+            embed.timestamp = datetime.now()
             
             # Send message with department mention
-            await ticket_channel.send(dept_mention, embed=embed, view=StaffView())
+            await ticket_channel.send(
+                f"{dept_mention}\n" + 
+                f"مرحباً {interaction.user.mention}، سيتم الرد على تذكرتك في أقرب وقت ممكن.",
+                embed=embed,
+                view=StaffView()
+            )
             
             # Send confirmation
             await interaction.followup.send(
