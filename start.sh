@@ -6,6 +6,9 @@ GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 NC='\033[0m' # No Color
 
+# Get the directory of the script
+DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
+
 # Function to check if screen session exists
 check_screen() {
     screen -list | grep -q "arablife"
@@ -14,9 +17,9 @@ check_screen() {
 # Function to start the bot
 start_bot() {
     echo -e "${YELLOW}Starting ArabLife bot...${NC}"
-    cd ~/bots/ArabLife
-    source venv/bin/activate
-    screen -dmS arablife bash -c "python3 bot.py"
+    # Create the command that will run inside screen
+    COMMAND="cd ${DIR} && source venv/bin/activate && python3 bot.py"
+    screen -dmS arablife bash -c "${COMMAND}"
     echo -e "${GREEN}Bot started in screen session 'arablife'${NC}"
     echo -e "${YELLOW}To view the bot console:${NC}"
     echo -e "1. Type: ${GREEN}screen -r arablife${NC}"
@@ -26,7 +29,7 @@ start_bot() {
 # Function to stop the bot
 stop_bot() {
     echo -e "${YELLOW}Stopping ArabLife bot...${NC}"
-    screen -S arablife -X quit
+    screen -S arablife -X quit 2>/dev/null || true
     echo -e "${GREEN}Bot stopped${NC}"
 }
 
