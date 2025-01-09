@@ -30,7 +30,7 @@ class Config:
     WELCOME_EMBED_DESCRIPTION = os.getenv('WELCOME_EMBED_DESCRIPTION', 'Welcome {user} to our community!\n\nMember Count: {member_count}')
     
     # Voice settings
-    WELCOME_SOUND_PATH = os.getenv('WELCOME_SOUND_PATH', 'welcome.mp3')
+    WELCOME_SOUND_PATH = os.getenv('WELCOME_SOUND_PATH', None)  # Optional welcome sound
     DEFAULT_VOLUME = float(os.getenv('DEFAULT_VOLUME', '0.5'))
     FFMPEG_PATH = os.getenv('FFMPEG_PATH', None)  # Optional custom FFmpeg path
     
@@ -103,10 +103,6 @@ class Config:
         # Validate FFmpeg if path is provided
         if cls.FFMPEG_PATH and not os.path.isfile(cls.FFMPEG_PATH):
             raise ValueError(f"FFmpeg not found at specified path: {cls.FFMPEG_PATH}")
-
-        # Validate welcome sound file (optional)
-        if cls.WELCOME_SOUND_PATH and not os.path.isfile(cls.WELCOME_SOUND_PATH):
-            print(f"Warning: Welcome sound file not found at: {cls.WELCOME_SOUND_PATH}")
 
         # Validate ticket settings if staff role is set
         if cls.TICKET_STAFF_ROLE_ID != 0:
