@@ -55,29 +55,28 @@ class VoiceCommands(Cog):
         # Check if member joined the welcome channel
         if after.channel == welcome_channel and before.channel != welcome_channel:
             try:
-                # Connect to voice channel if not already connected
-                if not welcome_channel.guild.voice_client:
-                    self.voice_client = await welcome_channel.connect()
-                else:
-                    self.voice_client = welcome_channel.guild.voice_client
-                    if self.voice_client.channel != welcome_channel:
-                        await self.voice_client.move_to(welcome_channel)
-
-                # Play the welcome sound if configured
-                if Config.WELCOME_SOUND_PATH:
-                    if os.path.exists(Config.WELCOME_SOUND_PATH):
-                        audio_source = discord.FFmpegPCMAudio(
-                            Config.WELCOME_SOUND_PATH,
-                            executable=self.ffmpeg_path
-                        )
-                        transformed_source = discord.PCMVolumeTransformer(audio_source, volume=Config.DEFAULT_VOLUME)
-                        
-                        if not self.voice_client.is_playing():
-                            self.voice_client.play(transformed_source)
-                            logger.info(f"Playing welcome sound for {member.name}#{member.discriminator} in {welcome_channel.name}")
+                # Only connect to voice and play sound if configured
+                if Config.WELCOME_SOUND_PATH and os.path.exists(Config.WELCOME_SOUND_PATH):
+                    # Connect to voice channel if not already connected
+                    if not welcome_channel.guild.voice_client:
+                        self.voice_client = await welcome_channel.connect()
                     else:
-                        logger.warning(f"Welcome sound file not found at {Config.WELCOME_SOUND_PATH}")
+                        self.voice_client = welcome_channel.guild.voice_client
+                        if self.voice_client.channel != welcome_channel:
+                            await self.voice_client.move_to(welcome_channel)
 
+                    # Play the welcome sound
+                    audio_source = discord.FFmpegPCMAudio(
+                        Config.WELCOME_SOUND_PATH,
+                        executable=self.ffmpeg_path
+                    )
+                    transformed_source = discord.PCMVolumeTransformer(audio_source, volume=Config.DEFAULT_VOLUME)
+                    
+                    if not self.voice_client.is_playing():
+                        self.voice_client.play(transformed_source)
+                        logger.info(f"Playing welcome sound for {member.name}#{member.discriminator} in {welcome_channel.name}")
+                else:
+                    logger.warning(f"Welcome sound file not found at {Config.WELCOME_SOUND_PATH}")
             except Exception as e:
                 logger.error(f"Error playing welcome sound: {str(e)}")
 
@@ -103,28 +102,26 @@ class VoiceCommands(Cog):
 
             await ctx.send("*جاري تشغيل صوت الترحيب...*")
 
-            # Connect to voice channel
-            if not welcome_channel.guild.voice_client:
-                self.voice_client = await welcome_channel.connect()
-            else:
-                self.voice_client = welcome_channel.guild.voice_client
-                if self.voice_client.channel != welcome_channel:
-                    await self.voice_client.move_to(welcome_channel)
-
-            # Play sound if configured
-            if Config.WELCOME_SOUND_PATH:
-                if os.path.exists(Config.WELCOME_SOUND_PATH):
-                    audio_source = discord.FFmpegPCMAudio(
-                        Config.WELCOME_SOUND_PATH,
-                        executable=self.ffmpeg_path
-                    )
-                    transformed_source = discord.PCMVolumeTransformer(audio_source, volume=Config.DEFAULT_VOLUME)
-                    
-                    if not self.voice_client.is_playing():
-                        self.voice_client.play(transformed_source)
-                        logger.info(f"Testing welcome sound in {welcome_channel.name}")
+            # Only connect to voice and play sound if configured
+            if Config.WELCOME_SOUND_PATH and os.path.exists(Config.WELCOME_SOUND_PATH):
+                # Connect to voice channel
+                if not welcome_channel.guild.voice_client:
+                    self.voice_client = await welcome_channel.connect()
                 else:
-                    await ctx.send("*لم يتم العثور على ملف الصوت.*")
+                    self.voice_client = welcome_channel.guild.voice_client
+                    if self.voice_client.channel != welcome_channel:
+                        await self.voice_client.move_to(welcome_channel)
+
+                # Play the welcome sound
+                audio_source = discord.FFmpegPCMAudio(
+                    Config.WELCOME_SOUND_PATH,
+                    executable=self.ffmpeg_path
+                )
+                transformed_source = discord.PCMVolumeTransformer(audio_source, volume=Config.DEFAULT_VOLUME)
+                
+                if not self.voice_client.is_playing():
+                    self.voice_client.play(transformed_source)
+                    logger.info(f"Testing welcome sound in {welcome_channel.name}")
             else:
                 await ctx.send("*لم يتم تكوين ملف الصوت.*")
 

@@ -91,8 +91,9 @@ async def main():
     try:
         Config.validate_config()
     except ValueError as e:
-        if "Welcome sound file not found" in str(e):
-            print(f"Warning: {str(e)}")
+        if "Welcome sound file not found" in str(e) or "welcome.mp3" in str(e):
+            # Ignore welcome sound file errors
+            pass
         else:
             print(f"Configuration error: {str(e)}")
             return
