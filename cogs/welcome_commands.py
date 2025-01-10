@@ -241,4 +241,18 @@ class WelcomeCommands(commands.Cog):
 
 async def setup(bot):
     """Setup function for loading the cog"""
-    await bot.add_cog(WelcomeCommands(bot))
+    # Create cog instance
+    cog = WelcomeCommands(bot)
+    
+    # Add cog to bot
+    await bot.add_cog(cog)
+    
+    try:
+        # Register app commands to guild
+        guild = discord.Object(id=Config.GUILD_ID)
+        bot.tree.add_command(cog.set_welcome_channel, guild=guild)
+        bot.tree.add_command(cog.set_welcome_background, guild=guild)
+        bot.tree.add_command(cog.test_welcome, guild=guild)
+        print("Registered welcome commands to guild")
+    except Exception as e:
+        print(f"Failed to register welcome commands: {e}")
