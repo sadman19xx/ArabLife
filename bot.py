@@ -20,7 +20,6 @@ intents.voice_states = True  # Required for voice functionality
 
 class ArabLifeBot(commands.Bot):
     """Custom bot class with additional functionality"""
-
     
     def __init__(self):
         # Get prefix from database or use default
@@ -87,9 +86,22 @@ class ArabLifeBot(commands.Bot):
         self.add_view(TicketView())
         self.add_view(StaffView())
 
+        # Set up command syncing
+        self.tree.on_error = self.on_app_command_error
+        
+        # Sync commands with guild
+        if Config.GUILD_ID:
+            guild = discord.Object(id=Config.GUILD_ID)
+            self.tree.copy_global_to(guild=guild)
+            await self.tree.sync(guild=guild)
+            print("Successfully synced commands to guild!")
+
     async def on_ready(self):
         """Event triggered when the bot is ready"""
         print(f'Logged in as {self.user.name}')
+        print(f'Bot ID: {self.user.id}')
+        print(f'Discord.py Version: {discord.__version__}')
+        print('------')
 
         # Setup logging
         logger = setup_logging(self, Config.ROLE_ACTIVITY_LOG_CHANNEL_ID, Config.AUDIT_LOG_CHANNEL_ID)
@@ -97,20 +109,6 @@ class ArabLifeBot(commands.Bot):
         # Set default status
         activity = discord.Activity(type=discord.ActivityType.watching, name="you my love")
         await self.change_presence(activity=activity)
-
-        # Sync commands on startup
-        print("Syncing commands...")
-        try:
-            guild = discord.Object(id=Config.GUILD_ID)
-            # Clear existing commands first
-            self.tree.clear_commands(guild=guild)
-            # Copy global commands to guild
-            self.tree.copy_global_to(guild=guild)
-            # Sync commands
-            await self.tree.sync(guild=guild)
-            print("Successfully synced commands!")
-        except Exception as e:
-            print(f"Failed to sync commands: {str(e)}")
 
         # Initialize database for each guild
         for guild in self.guilds:
@@ -129,6 +127,28 @@ class ArabLifeBot(commands.Bot):
                 
                 await conn.commit()
 
+    async def on_guild_join(self, guild: discord.Guild):
+        """Event triggered when the bot joins a new guild"""
+        # Initialize database for new guild
+        async with aiosqlite.connect(db.db_path) as conn:
+            await conn.execute("""
+                INSERT OR IGNORE INTO guilds (id, name, owner_id, member_count)
+                VALUES (?, ?, ?, ?)
+            """, (str(guild.id), guild.name, str(guild.owner_id), guild.member_count))
+            
+            await conn.execute("""
+                INSERT OR IGNORE INTO bot_settings (guild_id, prefix)
+                VALUES (?, ?)
+            """, (str(guild.id), "!"))
+            
+            await conn.commit()
+
+        # Sync commands to the new guild
+        if Config.GUILD_ID and guild.id == Config.GUILD_ID:
+            guild_obj = discord.Object(id=guild.id)
+            self.tree.copy_global_to(guild=guild_obj)
+            await self.tree.sync(guild=guild_obj)
+            print(f"Synced commands to new guild: {guild.name}")
 
     async def on_command_error(self, ctx, error):
         """Global error handler for command errors"""

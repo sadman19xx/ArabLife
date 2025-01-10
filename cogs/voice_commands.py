@@ -1,6 +1,7 @@
 import discord
 from discord.ext import commands
-from discord.ext.commands import Cog, cooldown, BucketType
+from discord import app_commands
+from discord.ext.commands import Cog
 import logging
 import os
 from config import Config
@@ -19,25 +20,18 @@ class VoiceCommands(Cog):
     def _get_ffmpeg_path(self):
         """Try to find FFmpeg in common locations"""
         common_paths = [
+            "/usr/bin/ffmpeg",  # Linux default
+            "/usr/local/bin/ffmpeg",  # Linux alternative
+            "/opt/homebrew/bin/ffmpeg",  # macOS Homebrew
             r"C:\ffmpeg\bin\ffmpeg.exe",  # Windows custom install
-            r"C:\Program Files\ffmpeg\bin\ffmpeg.exe",  # Windows program files
-            r"C:\Program Files (x86)\ffmpeg\bin\ffmpeg.exe",  # Windows program files (x86)
             "ffmpeg"  # System PATH
         ]
         
         for path in common_paths:
             if os.path.isfile(path):
                 return path
-            elif os.path.isfile(path + ".exe"):  # Check with .exe extension
-                return path + ".exe"
         
-        return "ffmpeg"  # Default to system PATH as last resort
-
-    async def cog_check(self, ctx):
-        """Check if user has required permissions for any command in this cog"""
-        if not ctx.guild:
-            raise commands.NoPrivateMessage()
-        return True
+        return "/usr/bin/ffmpeg"  # Default to Linux standard location
 
     @Cog.listener()
     async def on_voice_state_update(self, member, before, after):
@@ -49,7 +43,7 @@ class VoiceCommands(Cog):
         # Get the configured welcome channel
         welcome_channel = self.bot.get_channel(Config.WELCOME_VOICE_CHANNEL_ID)
         if not welcome_channel:
-            logger.error("Welcome voice channel not found")
+            logger.warning("Welcome voice channel not found")
             return
 
         # Check if member joined the welcome channel
@@ -80,10 +74,13 @@ class VoiceCommands(Cog):
             except Exception as e:
                 logger.error(f"Error playing welcome sound: {str(e)}")
 
-    @commands.command()
-    @commands.has_permissions(administrator=True)
-    @cooldown(1, Config.SOUND_COMMAND_COOLDOWN, BucketType.guild)
-    async def testsound(self, ctx):
+    @app_commands.command(
+        name="testsound",
+        description="Test the welcome sound"
+    )
+    @app_commands.checks.has_permissions(administrator=True)
+    @app_commands.checks.cooldown(1, Config.SOUND_COMMAND_COOLDOWN)
+    async def test_sound(self, interaction: discord.Interaction):
         """Test the welcome sound"""
         try:
             # Log FFmpeg path being used
@@ -91,16 +88,22 @@ class VoiceCommands(Cog):
             
             # Verify FFmpeg exists
             if not os.path.isfile(self.ffmpeg_path) and self.ffmpeg_path != "ffmpeg":
-                await ctx.send("*خطأ: لم يتم العثور على FFmpeg. يرجى التحقق من التثبيت.*")
+                await interaction.response.send_message(
+                    "*خطأ: لم يتم العثور على FFmpeg. يرجى التحقق من التثبيت.*",
+                    ephemeral=True
+                )
                 return
 
             # Get the welcome channel
             welcome_channel = self.bot.get_channel(Config.WELCOME_VOICE_CHANNEL_ID)
             if not welcome_channel:
-                await ctx.send("*لم يتم العثور على قناة الترحيب.*")
+                await interaction.response.send_message(
+                    "*لم يتم العثور على قناة الترحيب.*",
+                    ephemeral=True
+                )
                 return
 
-            await ctx.send("*جاري تشغيل صوت الترحيب...*")
+            await interaction.response.send_message("*جاري تشغيل صوت الترحيب...*")
 
             # Only connect to voice and play sound if configured
             if Config.WELCOME_SOUND_PATH and os.path.exists(Config.WELCOME_SOUND_PATH):
@@ -123,49 +126,81 @@ class VoiceCommands(Cog):
                     self.voice_client.play(transformed_source)
                     logger.info(f"Testing welcome sound in {welcome_channel.name}")
             else:
-                await ctx.send("*لم يتم تكوين ملف الصوت.*")
+                await interaction.followup.send("*لم يتم تكوين ملف الصوت.*")
 
         except Exception as e:
             logger.error(f"Error testing welcome sound: {str(e)}")
-            await ctx.send(f"*حدث خطأ أثناء تشغيل الصوت: {str(e)}*")
+            await interaction.followup.send(f"*حدث خطأ أثناء تشغيل الصوت: {str(e)}*")
 
-    @commands.command()
-    @commands.has_permissions(administrator=True)
-    async def volume(self, ctx, vol: float):
+    @app_commands.command(
+        name="volume",
+        description="Change the bot's voice volume"
+    )
+    @app_commands.describe(
+        volume="Volume level (0.0 to 1.0)"
+    )
+    @app_commands.checks.has_permissions(administrator=True)
+    async def set_volume(self, interaction: discord.Interaction, volume: float):
         """Change the volume (0.0 to 1.0)"""
         if not self.voice_client:
-            await ctx.send("*البوت غير متصل بالصوت.*")
+            await interaction.response.send_message(
+                "*البوت غير متصل بالصوت.*",
+                ephemeral=True
+            )
             return
 
         try:
             # Ensure volume is between 0 and 1
-            vol = min(1.0, max(0.0, vol))
+            volume = min(1.0, max(0.0, volume))
             
             if self.voice_client.source:
-                self.voice_client.source.volume = vol
-                await ctx.send(f"*تم تغيير مستوى الصوت الى {vol}*")
-                logger.info(f"Volume changed to {vol} by {ctx.author.name}#{ctx.author.discriminator}")
+                self.voice_client.source.volume = volume
+                await interaction.response.send_message(f"*تم تغيير مستوى الصوت الى {volume}*")
+                logger.info(f"Volume changed to {volume} by {interaction.user.name}#{interaction.user.discriminator}")
             else:
-                await ctx.send("*لا يوجد صوت قيد التشغيل.*")
+                await interaction.response.send_message(
+                    "*لا يوجد صوت قيد التشغيل.*",
+                    ephemeral=True
+                )
         except Exception as e:
             logger.error(f"Error changing volume: {str(e)}")
-            await ctx.send("*حدث خطأ أثناء تغيير مستوى الصوت.*")
+            await interaction.response.send_message(
+                "*حدث خطأ أثناء تغيير مستوى الصوت.*",
+                ephemeral=True
+            )
 
-    @testsound.error
-    @volume.error
-    async def voice_command_error(self, ctx, error):
-        """Error handler for voice commands"""
-        if isinstance(error, commands.MissingPermissions):
-            await ctx.send('*لا تملك الصلاحية لأستخدام هذه الامر.*')
-        elif isinstance(error, commands.CommandOnCooldown):
-            await ctx.send(f'*الرجاء الانتظار {error.retry_after:.1f} ثواني.*')
-        elif isinstance(error, commands.NoPrivateMessage):
-            await ctx.send('*لا يمكن استخدام هذا الأمر في الرسائل الخاصة.*')
-        elif isinstance(error, commands.BadArgument):
-            await ctx.send('*يرجى إدخال رقم صحيح بين 0.0 و 1.0*')
+    async def cog_app_command_error(self, interaction: discord.Interaction, error: app_commands.AppCommandError):
+        """Error handler for application commands"""
+        if isinstance(error, app_commands.CommandOnCooldown):
+            await interaction.response.send_message(
+                f"*الرجاء الانتظار {error.retry_after:.1f} ثواني.*",
+                ephemeral=True
+            )
+        elif isinstance(error, app_commands.MissingPermissions):
+            await interaction.response.send_message(
+                "*لا تملك الصلاحية لأستخدام هذه الامر.*",
+                ephemeral=True
+            )
         else:
-            logger.error(f"Unexpected error in voice command: {str(error)}")
-            await ctx.send('*حدث خطأ غير متوقع.*')
+            logger.error(f"Voice command error: {str(error)}")
+            await interaction.response.send_message(
+                "*حدث خطأ غير متوقع.*",
+                ephemeral=True
+            )
 
 async def setup(bot):
-    await bot.add_cog(VoiceCommands(bot))
+    """Setup function for loading the cog"""
+    # Create cog instance
+    cog = VoiceCommands(bot)
+    
+    # Add cog to bot
+    await bot.add_cog(cog)
+    
+    try:
+        # Register app commands to guild
+        guild = discord.Object(id=Config.GUILD_ID)
+        bot.tree.add_command(cog.test_sound, guild=guild)
+        bot.tree.add_command(cog.set_volume, guild=guild)
+        print("Registered voice commands to guild")
+    except Exception as e:
+        print(f"Failed to register voice commands: {e}")

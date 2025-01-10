@@ -1,6 +1,7 @@
 import discord
 from discord.ext import commands
-from discord.ext.commands import Cog, cooldown, BucketType
+from discord import app_commands
+from discord.ext.commands import Cog
 import logging
 from config import Config
 
@@ -19,12 +20,6 @@ class StatusCommands(Cog):
             "competing": discord.ActivityType.competing,
         }
 
-    async def cog_check(self, ctx):
-        """Check if user has required permissions for any command in this cog"""
-        if not ctx.guild:
-            raise commands.NoPrivateMessage()
-        return True
-
     def _validate_status(self, activity_type: str, message: str) -> bool:
         """Validate status parameters"""
         # Check activity type
@@ -41,17 +36,31 @@ class StatusCommands(Cog):
             
         return True
 
-    @commands.command()
-    @commands.has_permissions(administrator=True)
-    @cooldown(1, Config.STATUS_COMMAND_COOLDOWN, BucketType.guild)
-    async def setstatus(self, ctx, activity_type: str, *, message: str):
-        """Change the bot's status dynamically.
-        Usage: /setstatus <type> <message>
-        Types: playing, streaming, listening, watching, competing
-        """
+    @app_commands.command(
+        name="setstatus",
+        description="Change the bot's status"
+    )
+    @app_commands.describe(
+        activity_type="Type of activity (playing, streaming, listening, watching, competing)",
+        message="Status message to display"
+    )
+    @app_commands.choices(activity_type=[
+        app_commands.Choice(name="Playing", value="playing"),
+        app_commands.Choice(name="Streaming", value="streaming"),
+        app_commands.Choice(name="Listening", value="listening"),
+        app_commands.Choice(name="Watching", value="watching"),
+        app_commands.Choice(name="Competing", value="competing")
+    ])
+    @app_commands.checks.has_permissions(administrator=True)
+    @app_commands.checks.cooldown(1, Config.STATUS_COMMAND_COOLDOWN)
+    async def set_status(self, interaction: discord.Interaction, activity_type: str, message: str):
+        """Change the bot's status dynamically"""
         # Validate input
         if not self._validate_status(activity_type, message):
-            await ctx.send("❌ *نوع النشاط غير صالح أو الرسالة تحتوي على كلمات محظورة.*")
+            await interaction.response.send_message(
+                "❌ *نوع النشاط غير صالح أو الرسالة تحتوي على كلمات محظورة.*",
+                ephemeral=True
+            )
             return
 
         try:
@@ -60,31 +69,56 @@ class StatusCommands(Cog):
                 name=message
             )
             await self.bot.change_presence(activity=activity)
-            await ctx.send(f"✅ *تم تغيير الحالة الى: {activity_type.capitalize()} {message}*")
-            logger.info(f"Status changed to: {activity_type.capitalize()} {message} by {ctx.author.name}#{ctx.author.discriminator}")
+            await interaction.response.send_message(
+                f"✅ *تم تغيير الحالة الى: {activity_type.capitalize()} {message}*"
+            )
+            logger.info(f"Status changed to: {activity_type.capitalize()} {message} by {interaction.user.name}#{interaction.user.discriminator}")
             
         except discord.InvalidArgument:
-            await ctx.send("❌ *معطيات غير صالحة.*")
+            await interaction.response.send_message(
+                "❌ *معطيات غير صالحة.*",
+                ephemeral=True
+            )
             logger.error(f"Invalid status parameters: type={activity_type}, message={message}")
             
         except Exception as e:
-            await ctx.send("❌ *حدث خطأ أثناء تغيير الحالة.*")
+            await interaction.response.send_message(
+                "❌ *حدث خطأ أثناء تغيير الحالة.*",
+                ephemeral=True
+            )
             logger.error(f"Error changing status: {str(e)}")
 
-    @setstatus.error
-    async def status_command_error(self, ctx, error):
-        """Error handler for status commands"""
-        if isinstance(error, commands.MissingPermissions):
-            await ctx.send('*لا تملك الصلاحية لأستخدام هذه الامر.*')
-        elif isinstance(error, commands.CommandOnCooldown):
-            await ctx.send(f'*الرجاء الانتظار {error.retry_after:.1f} ثواني.*')
-        elif isinstance(error, commands.MissingRequiredArgument):
-            await ctx.send('*يرجى تقديم نوع النشاط والرسالة.*')
-        elif isinstance(error, commands.NoPrivateMessage):
-            await ctx.send('*لا يمكن استخدام هذا الأمر في الرسائل الخاصة.*')
+    async def cog_app_command_error(self, interaction: discord.Interaction, error: app_commands.AppCommandError):
+        """Error handler for application commands"""
+        if isinstance(error, app_commands.CommandOnCooldown):
+            await interaction.response.send_message(
+                f"*الرجاء الانتظار {error.retry_after:.1f} ثواني.*",
+                ephemeral=True
+            )
+        elif isinstance(error, app_commands.MissingPermissions):
+            await interaction.response.send_message(
+                "*لا تملك الصلاحية لأستخدام هذه الامر.*",
+                ephemeral=True
+            )
         else:
-            logger.error(f"Unexpected error in status command: {str(error)}")
-            await ctx.send('*حدث خطأ غير متوقع.*')
+            logger.error(f"Status command error: {str(error)}")
+            await interaction.response.send_message(
+                "*حدث خطأ غير متوقع.*",
+                ephemeral=True
+            )
 
 async def setup(bot):
-    await bot.add_cog(StatusCommands(bot))
+    """Setup function for loading the cog"""
+    # Create cog instance
+    cog = StatusCommands(bot)
+    
+    # Add cog to bot
+    await bot.add_cog(cog)
+    
+    try:
+        # Register app commands to guild
+        guild = discord.Object(id=Config.GUILD_ID)
+        bot.tree.add_command(cog.set_status, guild=guild)
+        print("Registered status commands to guild")
+    except Exception as e:
+        print(f"Failed to register status commands: {e}")
