@@ -5,7 +5,7 @@ import logging
 import json
 import asyncio
 from datetime import datetime, timedelta
-from typing import Dict, Optional
+from typing import Dict, Optional, Union
 import aiosqlite
 import os
 from config import Config
@@ -17,38 +17,46 @@ class LevelingCommands(Cog):
     
     def __init__(self, bot):
         self.bot = bot
-        self.settings = {
-            "is_enabled": Config.LEVELING_ENABLED,
-            "xp_per_message": Config.XP_PER_MESSAGE,
-            "xp_cooldown": Config.XP_COOLDOWN,
-            "level_up_channel_id": Config.LEVEL_UP_CHANNEL_ID,
-            "level_up_message": Config.LEVEL_UP_MESSAGE,
-            "role_rewards": json.loads(Config.ROLE_REWARDS)
-        }
         self.user_cooldowns: Dict[int, datetime] = {}
-        self.db_path = './bot_dashboard.db'
-        asyncio.create_task(self.setup_database())
 
-    async def setup_database(self):
-        """Initialize the SQLite database"""
-        try:
-            async with aiosqlite.connect(self.db_path) as db:
-                # Create guild entry if it doesn't exist
-                await db.execute('''
-                    INSERT OR IGNORE INTO guilds (discord_id, name)
-                    VALUES (?, ?)
-                ''', (str(Config.GUILD_ID), "ArabLife"))
+    async def get_settings(self, guild_id: str) -> dict:
+        """Get leveling settings for a guild"""
+        async with aiosqlite.connect(db.db_path) as conn:
+            conn.row_factory = aiosqlite.Row
+            async with conn.execute("""
+                SELECT * FROM leveling_settings
+                WHERE guild_id = ?
+            """, (guild_id,)) as cursor:
+                settings = await cursor.fetchone()
                 
-                # Create guild settings if they don't exist
-                await db.execute('''
-                    INSERT OR IGNORE INTO guild_settings (guild_id, custom_settings)
-                    SELECT id, '{"leveling": ' || ? || '}'
-                    FROM guilds WHERE discord_id = ?
-                ''', (json.dumps(self.settings), str(Config.GUILD_ID)))
+            if not settings:
+                # Create default settings
+                await conn.execute("""
+                    INSERT INTO leveling_settings (
+                        guild_id, xp_per_message, xp_cooldown,
+                        level_up_channel_id, level_up_message,
+                        role_rewards, channel_multipliers, role_multipliers
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                """, (
+                    guild_id,
+                    Config.XP_PER_MESSAGE,
+                    Config.XP_COOLDOWN,
+                    Config.LEVEL_UP_CHANNEL_ID,
+                    Config.LEVEL_UP_MESSAGE,
+                    "{}",  # role_rewards
+                    "{}",  # channel_multipliers
+                    "{}"   # role_multipliers
+                ))
+                await conn.commit()
                 
-                await db.commit()
-        except Exception as e:
-            logger.error(f"Failed to setup database: {str(e)}")
+                # Get newly created settings
+                async with conn.execute("""
+                    SELECT * FROM leveling_settings
+                    WHERE guild_id = ?
+                """, (guild_id,)) as cursor:
+                    settings = await cursor.fetchone()
+                    
+            return dict(settings)
 
     async def save_settings(self):
         """Save current settings to database"""
@@ -63,84 +71,48 @@ class LevelingCommands(Cog):
         except Exception as e:
             logger.error(f"Failed to save settings: {str(e)}")
 
-    def calculate_xp_for_level(self, level: int) -> int:
-        """Calculate XP required for a specific level"""
-        return 5 * (level ** 2) + 50 * level + 100
-
-    def calculate_level_from_xp(self, xp: int) -> int:
-        """Calculate level based on total XP"""
-        level = 0
-        while xp >= self.calculate_xp_for_level(level):
-            xp -= self.calculate_xp_for_level(level)
-            level += 1
-        return level
-
-    async def add_xp(self, user_id: int, guild_id: int, xp_amount: int) -> Optional[int]:
-        """Add XP to user and return new level if leveled up"""
-        try:
-            async with aiosqlite.connect(self.db_path) as db:
-                # Get guild's database ID
-                async with db.execute(
-                    'SELECT id FROM guilds WHERE discord_id = ?',
-                    (str(guild_id),)
-                ) as cursor:
-                    guild_result = await cursor.fetchone()
-                    if not guild_result:
-                        return None
-                    db_guild_id = guild_result[0]
-                
-                # Get or create leveling entry
-                async with db.execute(
-                    'SELECT xp, level FROM leveling WHERE guild_id = ? AND user_discord_id = ?',
-                    (db_guild_id, str(user_id))
-                ) as cursor:
-                    result = await cursor.fetchone()
-                
-                if result:
-                    current_xp, current_level = result
-                else:
-                    current_xp, current_level = 0, 0
-                    await db.execute(
-                        'INSERT INTO leveling (guild_id, user_discord_id, xp, level) VALUES (?, ?, 0, 0)',
-                        (db_guild_id, str(user_id))
-                    )
-                
-                new_xp = current_xp + xp_amount
-                new_level = self.calculate_level_from_xp(new_xp)
-                
-                await db.execute('''
-                    UPDATE leveling 
-                    SET xp = ?, level = ?, last_message_time = ?
-                    WHERE guild_id = ? AND user_discord_id = ?
-                ''', (new_xp, new_level, datetime.now(), db_guild_id, str(user_id)))
-                
-                await db.commit()
-                return new_level if new_level > current_level else None
-                
-        except Exception as e:
-            logger.error(f"Failed to add XP: {str(e)}")
-            return None
+    async def calculate_xp_gain(self, message: discord.Message, base_xp: int) -> int:
+        """Calculate XP gain with multipliers"""
+        settings = await self.get_settings(str(message.guild.id))
+        multiplier = 1.0
+        
+        # Channel multiplier
+        channel_multipliers = json.loads(settings['channel_multipliers'])
+        if str(message.channel.id) in channel_multipliers:
+            multiplier *= float(channel_multipliers[str(message.channel.id)])
+            
+        # Role multipliers (highest role multiplier applies)
+        role_multipliers = json.loads(settings['role_multipliers'])
+        max_role_multiplier = 1.0
+        for role in message.author.roles:
+            if str(role.id) in role_multipliers:
+                role_mult = float(role_multipliers[str(role.id)])
+                max_role_multiplier = max(max_role_multiplier, role_mult)
+        
+        multiplier *= max_role_multiplier
+        
+        return int(base_xp * multiplier)
 
     async def handle_level_up(self, member: discord.Member, new_level: int):
         """Handle level up event including role rewards"""
-        if not self.settings['is_enabled']:
-            return
-
+        settings = await self.get_settings(str(member.guild.id))
+        
         try:
             # Send level up message
-            if self.settings['level_up_channel_id']:
-                channel = self.bot.get_channel(int(self.settings['level_up_channel_id']))
+            if settings['level_up_channel_id']:
+                channel = self.bot.get_channel(int(settings['level_up_channel_id']))
                 if channel:
-                    message = self.settings['level_up_message'].format(
+                    message = settings['level_up_message'].format(
                         user=member.mention,
                         level=new_level
                     )
                     await channel.send(message)
 
             # Handle role rewards
-            for reward in self.settings['role_rewards']:
-                if reward['level'] == new_level:
-                    role = member.guild.get_role(int(reward['role_id']))
+            role_rewards = json.loads(settings['role_rewards'])
+            for level_str, role_id in role_rewards.items():
+                if int(level_str) == new_level:
+                    role = member.guild.get_role(int(role_id))
                     if role:
                         await member.add_roles(role)
                         logger.info(f"Added role {role.name} to {member.name} for reaching level {new_level}")
@@ -151,168 +123,359 @@ class LevelingCommands(Cog):
     @commands.Cog.listener()
     async def on_message(self, message: discord.Message):
         """Handle XP gain from messages"""
-        if not self.settings['is_enabled'] or message.author.bot or not message.guild:
+        if message.author.bot or not message.guild:
             return
             
         try:
+            settings = await self.get_settings(str(message.guild.id))
+            
+            # Check if leveling is enabled
+            if not settings['leveling_enabled']:
+                return
+                
             # Check cooldown
             user_id = message.author.id
             now = datetime.now()
             if user_id in self.user_cooldowns:
                 time_diff = (now - self.user_cooldowns[user_id]).total_seconds()
-                if time_diff < self.settings['xp_cooldown']:
+                if time_diff < settings['xp_cooldown']:
                     return
                     
             self.user_cooldowns[user_id] = now
             
-            # Add XP
-            new_level = await self.add_xp(user_id, message.guild.id, self.settings['xp_per_message'])
+            # Calculate XP with multipliers
+            xp_amount = await self.calculate_xp_gain(
+                message,
+                settings['xp_per_message']
+            )
+            
+            # Add XP using database handler
+            new_level = await db.add_xp(
+                str(message.guild.id),
+                str(message.author.id),
+                xp_amount
+            )
+            
             if new_level:
                 await self.handle_level_up(message.author, new_level)
                 
         except Exception as e:
             logger.error(f"Failed to process message XP: {str(e)}")
 
-    @commands.hybrid_command()
-    async def rank(self, ctx: commands.Context, member: discord.Member = None):
+    @app_commands.command(
+        name="rank",
+        description="Check your or another user's rank"
+    )
+    async def rank(
+        self,
+        interaction: discord.Interaction,
+        member: discord.Member = None
+    ):
         """Check your or another user's rank"""
         try:
-            target = member or ctx.author
+            target = member or interaction.user
             
-            async with aiosqlite.connect(self.db_path) as db:
-                # Get guild's database ID
-                async with db.execute(
-                    'SELECT id FROM guilds WHERE discord_id = ?',
-                    (str(ctx.guild.id),)
-                ) as cursor:
-                    guild_result = await cursor.fetchone()
-                    if not guild_result:
-                        await ctx.send("Guild not found in database!")
-                        return
-                    db_guild_id = guild_result[0]
+            async with aiosqlite.connect(db.db_path) as conn:
+                conn.row_factory = aiosqlite.Row
                 
                 # Get user's XP and level
-                async with db.execute(
-                    'SELECT xp, level FROM leveling WHERE guild_id = ? AND user_discord_id = ?',
-                    (db_guild_id, str(target.id))
-                ) as cursor:
+                async with conn.execute("""
+                    SELECT xp, level FROM user_levels
+                    WHERE guild_id = ? AND user_id = ?
+                """, (str(interaction.guild_id), str(target.id))) as cursor:
                     result = await cursor.fetchone()
                 
                 if not result:
-                    await ctx.send(f"{target.mention} has not earned any XP yet!")
+                    await interaction.response.send_message(
+                        f"{target.mention} لم يكتسب أي نقاط خبرة بعد!",
+                        ephemeral=True
+                    )
                     return
                 
-                xp, level = result
+                xp, level = result['xp'], result['level']
                 
                 # Get user's rank
-                async with db.execute('''
-                    SELECT COUNT(*) FROM leveling 
+                async with conn.execute("""
+                    SELECT COUNT(*) as rank FROM user_levels 
                     WHERE guild_id = ? AND xp > (
-                        SELECT xp FROM leveling 
-                        WHERE guild_id = ? AND user_discord_id = ?
+                        SELECT xp FROM user_levels 
+                        WHERE guild_id = ? AND user_id = ?
                     )
-                ''', (db_guild_id, db_guild_id, str(target.id))) as cursor:
-                    rank = (await cursor.fetchone())[0] + 1
+                """, (str(interaction.guild_id), str(interaction.guild_id), str(target.id))) as cursor:
+                    rank = (await cursor.fetchone())['rank'] + 1
                 
-                next_level_xp = self.calculate_xp_for_level(level)
-                current_level_xp = xp - sum(self.calculate_xp_for_level(i) for i in range(level))
-                progress = (current_level_xp / next_level_xp) * 100
+                # Calculate progress
+                next_level_xp = db.calculate_level(xp + 1) * 100  # Simplified calculation
+                current_level_xp = xp - (level * 100)  # Simplified calculation
+                progress = (current_level_xp / next_level_xp) * 100 if next_level_xp > 0 else 0
                 
-                embed = discord.Embed(title="Rank Information", color=discord.Color.blue())
-                embed.set_author(name=target.display_name, icon_url=target.avatar.url if target.avatar else None)
-                embed.add_field(name="Rank", value=f"#{rank}", inline=True)
-                embed.add_field(name="Level", value=str(level), inline=True)
-                embed.add_field(name="XP", value=f"{xp} XP", inline=True)
-                embed.add_field(name="Progress to Next Level", value=f"{progress:.1f}%", inline=True)
+                # Get role multipliers
+                settings = await self.get_settings(str(interaction.guild_id))
+                role_multipliers = json.loads(settings['role_multipliers'])
+                active_multiplier = 1.0
+                for role in target.roles:
+                    if str(role.id) in role_multipliers:
+                        active_multiplier = max(
+                            active_multiplier,
+                            float(role_multipliers[str(role.id)])
+                        )
                 
-                await ctx.send(embed=embed)
+                embed = discord.Embed(
+                    title="معلومات المستوى",
+                    color=discord.Color.blue()
+                )
+                embed.set_author(
+                    name=target.display_name,
+                    icon_url=target.display_avatar.url
+                )
+                embed.add_field(name="الترتيب", value=f"#{rank}", inline=True)
+                embed.add_field(name="المستوى", value=str(level), inline=True)
+                embed.add_field(name="نقاط الخبرة", value=f"{xp} XP", inline=True)
+                
+                # Add multiplier info if active
+                if active_multiplier > 1.0:
+                    embed.add_field(
+                        name="مضاعف نقاط الخبرة",
+                        value=f"x{active_multiplier}",
+                        inline=True
+                    )
+                
+                # Create progress bar
+                progress_bar = "█" * int(progress / 10) + "░" * (10 - int(progress / 10))
+                embed.add_field(
+                    name="التقدم للمستوى التالي",
+                    value=f"`{progress_bar}` {progress:.1f}%",
+                    inline=False
+                )
+                
+                await interaction.response.send_message(embed=embed)
                 
         except Exception as e:
             logger.error(f"Failed to get rank: {str(e)}")
-            await ctx.send("An error occurred while fetching rank information.")
+            await interaction.response.send_message(
+                "*حدث خطأ أثناء جلب معلومات المستوى.*",
+                ephemeral=True
+            )
 
-    @commands.hybrid_command()
-    async def leaderboard(self, ctx: commands.Context):
+    @app_commands.command(
+        name="leaderboard",
+        description="Show the server's XP leaderboard"
+    )
+    async def leaderboard(self, interaction: discord.Interaction):
         """Show the server's XP leaderboard"""
         try:
-            async with aiosqlite.connect(self.db_path) as db:
-                # Get guild's database ID
-                async with db.execute(
-                    'SELECT id FROM guilds WHERE discord_id = ?',
-                    (str(ctx.guild.id),)
-                ) as cursor:
-                    guild_result = await cursor.fetchone()
-                    if not guild_result:
-                        await ctx.send("Guild not found in database!")
-                        return
-                    db_guild_id = guild_result[0]
+            async with aiosqlite.connect(db.db_path) as conn:
+                conn.row_factory = aiosqlite.Row
                 
-                async with db.execute('''
-                    SELECT user_discord_id, xp, level 
-                    FROM leveling 
+                async with conn.execute("""
+                    SELECT user_id, xp, level 
+                    FROM user_levels 
                     WHERE guild_id = ?
                     ORDER BY xp DESC 
                     LIMIT 10
-                ''', (db_guild_id,)) as cursor:
+                """, (str(interaction.guild_id),)) as cursor:
                     results = await cursor.fetchall()
                 
                 if not results:
-                    await ctx.send("No one has earned any XP yet!")
+                    await interaction.response.send_message(
+                        "*لم يكتسب أحد أي نقاط خبرة بعد!*",
+                        ephemeral=True
+                    )
                     return
                 
-                embed = discord.Embed(title="XP Leaderboard", color=discord.Color.gold())
+                embed = discord.Embed(
+                    title="🏆 قائمة المتصدرين",
+                    color=discord.Color.gold()
+                )
                 
-                for i, (user_id, xp, level) in enumerate(results, 1):
-                    member = ctx.guild.get_member(int(user_id))
-                    name = member.display_name if member else f"User {user_id}"
+                medals = ["🥇", "🥈", "🥉"]
+                for i, row in enumerate(results, 1):
+                    member = interaction.guild.get_member(int(row['user_id']))
+                    name = member.display_name if member else f"User {row['user_id']}"
                     
+                    medal = medals[i-1] if i <= 3 else "👤"
                     embed.add_field(
-                        name=f"#{i} {name}",
-                        value=f"Level {level} | {xp} XP",
+                        name=f"{medal} #{i} {name}",
+                        value=f"المستوى {row['level']} | {row['xp']} XP",
                         inline=False
                     )
                 
-                await ctx.send(embed=embed)
+                await interaction.response.send_message(embed=embed)
                 
         except Exception as e:
             logger.error(f"Failed to get leaderboard: {str(e)}")
-            await ctx.send("An error occurred while fetching the leaderboard.")
+            await interaction.response.send_message(
+                "*حدث خطأ أثناء جلب قائمة المتصدرين.*",
+                ephemeral=True
+            )
 
-    @commands.hybrid_command()
-    @commands.has_permissions(administrator=True)
-    async def setxp(self, ctx: commands.Context, member: discord.Member, xp: int):
+    @app_commands.command(
+        name="setxp",
+        description="Set a user's XP (Admin only)"
+    )
+    @app_commands.checks.has_permissions(administrator=True)
+    async def setxp(
+        self,
+        interaction: discord.Interaction,
+        member: discord.Member,
+        xp: int
+    ):
         """Set a user's XP (Admin only)"""
         try:
             if xp < 0:
-                await ctx.send("XP cannot be negative!")
+                await interaction.response.send_message(
+                    "*لا يمكن أن تكون نقاط الخبرة سالبة!*",
+                    ephemeral=True
+                )
                 return
             
-            new_level = self.calculate_level_from_xp(xp)
+            new_level = db.calculate_level(xp)
             
-            async with aiosqlite.connect(self.db_path) as db:
-                # Get guild's database ID
-                async with db.execute(
-                    'SELECT id FROM guilds WHERE discord_id = ?',
-                    (str(ctx.guild.id),)
-                ) as cursor:
-                    guild_result = await cursor.fetchone()
-                    if not guild_result:
-                        await ctx.send("Guild not found in database!")
-                        return
-                    db_guild_id = guild_result[0]
-                
-                await db.execute('''
-                    INSERT OR REPLACE INTO leveling (guild_id, user_discord_id, xp, level)
+            async with aiosqlite.connect(db.db_path) as conn:
+                await conn.execute("""
+                    INSERT OR REPLACE INTO user_levels (guild_id, user_id, xp, level)
                     VALUES (?, ?, ?, ?)
-                ''', (db_guild_id, str(member.id), xp, new_level))
-                
-                await db.commit()
+                """, (str(interaction.guild_id), str(member.id), xp, new_level))
+                await conn.commit()
             
-            await ctx.send(f"Set {member.mention}'s XP to {xp} (Level {new_level})")
+            await interaction.response.send_message(
+                f"*تم تعيين نقاط خبرة {member.mention} إلى {xp} (المستوى {new_level})*"
+            )
             
         except Exception as e:
             logger.error(f"Failed to set XP: {str(e)}")
-            await ctx.send("An error occurred while setting XP.")
+            await interaction.response.send_message(
+                "*حدث خطأ أثناء تعيين نقاط الخبرة.*",
+                ephemeral=True
+            )
+
+    @app_commands.command(
+        name="setmultiplier",
+        description="Set XP multiplier for a role or channel"
+    )
+    @app_commands.checks.has_permissions(administrator=True)
+    async def set_multiplier(
+        self,
+        interaction: discord.Interaction,
+        target: Union[discord.Role, discord.TextChannel],
+        multiplier: float
+    ):
+        """Set XP multiplier for a role or channel"""
+        try:
+            if multiplier <= 0:
+                await interaction.response.send_message(
+                    "*يجب أن يكون المضاعف أكبر من 0.*",
+                    ephemeral=True
+                )
+                return
+                
+            settings = await self.get_settings(str(interaction.guild_id))
+            
+            if isinstance(target, discord.Role):
+                # Update role multiplier
+                role_multipliers = json.loads(settings['role_multipliers'])
+                role_multipliers[str(target.id)] = multiplier
+                
+                async with aiosqlite.connect(db.db_path) as conn:
+                    await conn.execute("""
+                        UPDATE leveling_settings
+                        SET role_multipliers = ?
+                        WHERE guild_id = ?
+                    """, (json.dumps(role_multipliers), str(interaction.guild_id)))
+                    await conn.commit()
+                    
+                await interaction.response.send_message(
+                    f"*تم تعيين مضاعف نقاط الخبرة للرتبة {target.mention} إلى {multiplier}x*"
+                )
+            else:
+                # Update channel multiplier
+                channel_multipliers = json.loads(settings['channel_multipliers'])
+                channel_multipliers[str(target.id)] = multiplier
+                
+                async with aiosqlite.connect(db.db_path) as conn:
+                    await conn.execute("""
+                        UPDATE leveling_settings
+                        SET channel_multipliers = ?
+                        WHERE guild_id = ?
+                    """, (json.dumps(channel_multipliers), str(interaction.guild_id)))
+                    await conn.commit()
+                    
+                await interaction.response.send_message(
+                    f"*تم تعيين مضاعف نقاط الخبرة للقناة {target.mention} إلى {multiplier}x*"
+                )
+                
+        except Exception as e:
+            logger.error(f"Failed to set multiplier: {str(e)}")
+            await interaction.response.send_message(
+                "*حدث خطأ أثناء تعيين المضاعف.*",
+                ephemeral=True
+            )
+
+    @app_commands.command(
+        name="removemultiplier",
+        description="Remove XP multiplier from a role or channel"
+    )
+    @app_commands.checks.has_permissions(administrator=True)
+    async def remove_multiplier(
+        self,
+        interaction: discord.Interaction,
+        target: Union[discord.Role, discord.TextChannel]
+    ):
+        """Remove XP multiplier from a role or channel"""
+        try:
+            settings = await self.get_settings(str(interaction.guild_id))
+            
+            if isinstance(target, discord.Role):
+                # Remove role multiplier
+                role_multipliers = json.loads(settings['role_multipliers'])
+                if str(target.id) in role_multipliers:
+                    del role_multipliers[str(target.id)]
+                    
+                    async with aiosqlite.connect(db.db_path) as conn:
+                        await conn.execute("""
+                            UPDATE leveling_settings
+                            SET role_multipliers = ?
+                            WHERE guild_id = ?
+                        """, (json.dumps(role_multipliers), str(interaction.guild_id)))
+                        await conn.commit()
+                        
+                    await interaction.response.send_message(
+                        f"*تم إزالة مضاعف نقاط الخبرة من الرتبة {target.mention}*"
+                    )
+                else:
+                    await interaction.response.send_message(
+                        "*لا يوجد مضاعف نقاط خبرة لهذه الرتبة.*",
+                        ephemeral=True
+                    )
+            else:
+                # Remove channel multiplier
+                channel_multipliers = json.loads(settings['channel_multipliers'])
+                if str(target.id) in channel_multipliers:
+                    del channel_multipliers[str(target.id)]
+                    
+                    async with aiosqlite.connect(db.db_path) as conn:
+                        await conn.execute("""
+                            UPDATE leveling_settings
+                            SET channel_multipliers = ?
+                            WHERE guild_id = ?
+                        """, (json.dumps(channel_multipliers), str(interaction.guild_id)))
+                        await conn.commit()
+                        
+                    await interaction.response.send_message(
+                        f"*تم إزالة مضاعف نقاط الخبرة من القناة {target.mention}*"
+                    )
+                else:
+                    await interaction.response.send_message(
+                        "*لا يوجد مضاعف نقاط خبرة لهذه القناة.*",
+                        ephemeral=True
+                    )
+                    
+        except Exception as e:
+            logger.error(f"Failed to remove multiplier: {str(e)}")
+            await interaction.response.send_message(
+                "*حدث خطأ أثناء إزالة المضاعف.*",
+                ephemeral=True
+            )
 
 async def setup(bot):
     await bot.add_cog(LevelingCommands(bot))

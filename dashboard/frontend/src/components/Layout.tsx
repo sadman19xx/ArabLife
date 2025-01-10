@@ -21,7 +21,7 @@ import {
   Dashboard as DashboardIcon,
   Code as CodeIcon,
   Settings as SettingsIcon,
-  Waving as WavingIcon,
+  EmojiPeople as WavingIcon,
   Security as SecurityIcon,
   EmojiEvents as LevelingIcon,
   Logout as LogoutIcon,

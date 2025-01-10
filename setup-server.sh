@@ -3,7 +3,7 @@
 # Colors for output
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
-RED='\033[0;31m'
+RED='\033[0m'
 NC='\033[0m'
 
 # Check if running as root
@@ -57,75 +57,111 @@ nginx -v
 
 # Configure nginx
 echo -e "${YELLOW}Configuring nginx...${NC}"
+
+# Create nginx configuration
+cat > /etc/nginx/nginx.conf << EOL
+user www-data;
+worker_processes auto;
+pid /run/nginx.pid;
+include /etc/nginx/modules-enabled/*.conf;
+
+events {
+    worker_connections 768;
+}
+
+http {
+    sendfile on;
+    tcp_nopush on;
+    tcp_nodelay on;
+    keepalive_timeout 65;
+    types_hash_max_size 2048;
+
+    include /etc/nginx/mime.types;
+    default_type application/octet-stream;
+
+    ssl_protocols TLSv1 TLSv1.1 TLSv1.2 TLSv1.3;
+    ssl_prefer_server_ciphers on;
+
+    access_log /var/log/nginx/access.log;
+    error_log /var/log/nginx/error.log;
+
+    gzip on;
+
+    map \$http_upgrade \$connection_upgrade {
+        default upgrade;
+        ''      close;
+    }
+
+    include /etc/nginx/conf.d/*.conf;
+    include /etc/nginx/sites-enabled/*;
+}
+EOL
+
+# Create site configuration
 cat > /etc/nginx/sites-available/arablife << EOL
 server {
     listen 80;
     server_name 45.76.83.149;
+    client_max_body_size 50M;
 
-    # Frontend proxy
     location / {
         proxy_pass http://localhost:3000;
         proxy_http_version 1.1;
-        proxy_set_header Upgrade \$http_upgrade;
-        proxy_set_header Connection 'upgrade';
         proxy_set_header Host \$host;
-        proxy_cache_bypass \$http_upgrade;
         proxy_set_header X-Real-IP \$remote_addr;
         proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
-        
-        # Additional WebSocket support
-        proxy_set_header Sec-WebSocket-Extensions \$http_sec_websocket_extensions;
-        proxy_set_header Sec-WebSocket-Key \$http_sec_websocket_key;
-        proxy_set_header Sec-WebSocket-Version \$http_sec_websocket_version;
+        proxy_set_header X-Forwarded-Proto \$scheme;
+
+        # WebSocket support
+        proxy_set_header Upgrade \$http_upgrade;
+        proxy_set_header Connection \$connection_upgrade;
     }
 
-    # Backend API proxy
     location /api {
         proxy_pass http://localhost:8000;
         proxy_http_version 1.1;
-        proxy_set_header Upgrade \$http_upgrade;
-        proxy_set_header Connection 'upgrade';
         proxy_set_header Host \$host;
-        proxy_cache_bypass \$http_upgrade;
         proxy_set_header X-Real-IP \$remote_addr;
         proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto \$scheme;
+
+        # WebSocket support
+        proxy_set_header Upgrade \$http_upgrade;
+        proxy_set_header Connection \$connection_upgrade;
     }
 
-    # API Documentation
     location /docs {
         proxy_pass http://localhost:8000/docs;
         proxy_http_version 1.1;
-        proxy_set_header Upgrade \$http_upgrade;
-        proxy_set_header Connection 'upgrade';
         proxy_set_header Host \$host;
-        proxy_cache_bypass \$http_upgrade;
+        proxy_set_header X-Real-IP \$remote_addr;
+        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto \$scheme;
     }
 
     location /redoc {
         proxy_pass http://localhost:8000/redoc;
         proxy_http_version 1.1;
-        proxy_set_header Upgrade \$http_upgrade;
-        proxy_set_header Connection 'upgrade';
         proxy_set_header Host \$host;
-        proxy_cache_bypass \$http_upgrade;
+        proxy_set_header X-Real-IP \$remote_addr;
+        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto \$scheme;
     }
 
-    # WebSocket support for development server
     location /ws {
         proxy_pass http://localhost:3000;
         proxy_http_version 1.1;
         proxy_set_header Upgrade \$http_upgrade;
-        proxy_set_header Connection "upgrade";
+        proxy_set_header Connection \$connection_upgrade;
         proxy_set_header Host \$host;
         proxy_cache_bypass \$http_upgrade;
     }
 
-    # Sockjs support for development server
     location /sockjs-node {
         proxy_pass http://localhost:3000;
         proxy_http_version 1.1;
         proxy_set_header Upgrade \$http_upgrade;
-        proxy_set_header Connection "upgrade";
+        proxy_set_header Connection \$connection_upgrade;
         proxy_set_header Host \$host;
         proxy_cache_bypass \$http_upgrade;
     }
@@ -169,8 +205,31 @@ deactivate
 echo -e "${YELLOW}Setting up frontend...${NC}"
 cd "${DIR}/dashboard/frontend"
 if [ ! -d "node_modules" ]; then
+    # Install core dependencies first
     npm install
+
+    # Install MUI and its dependencies
+    npm install @mui/material @emotion/react @emotion/styled @mui/icons-material
+
+    # Install additional dependencies
+    npm install react-color zustand react-router-dom axios
+
+    # Install all type definitions
+    npm install --save-dev \
+        @types/react \
+        @types/react-dom \
+        @types/react-router-dom \
+        @types/node \
+        @types/react-color \
+        @mui/types
+
+    # Clean install to ensure correct dependency tree
+    npm ci
 fi
+
+# Replace Waving icon with EmojiPeople
+echo -e "${YELLOW}Updating icon imports...${NC}"
+sed -i 's/Waving as WavingIcon/EmojiPeople as WavingIcon/g' src/components/Layout.tsx
 
 # Set proper permissions
 echo -e "${YELLOW}Setting file permissions...${NC}"

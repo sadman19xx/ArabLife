@@ -1,83 +1,67 @@
 #!/bin/bash
 
 # Colors for output
-RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
-NC='\033[0m' # No Color
+RED='\033[0m'
+NC='\033[0m'
 
 # Get the directory of the script
 DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 
-# Function to check if screen session exists
-check_screen() {
-    screen -list | grep -q "arablife"
+# Function to check if a screen session exists
+screen_exists() {
+    screen -list | grep -q "$1"
 }
 
-# Function to start the bot
-start_bot() {
-    echo -e "${YELLOW}Starting ArabLife bot...${NC}"
-    cd "${DIR}"
-    source venv/bin/activate
-    screen -dmS arablife python3 bot.py
-    sleep 2
-    if check_screen; then
-        echo -e "${GREEN}Bot started successfully in screen session 'arablife'${NC}"
-        echo -e "${YELLOW}To view the bot console:${NC}"
-        echo -e "1. Type: ${GREEN}screen -r arablife${NC}"
-        echo -e "2. To detach from console: Press ${GREEN}Ctrl+A${NC} then ${GREEN}D${NC}"
-    else
-        echo -e "${RED}Failed to start bot. Check logs for errors.${NC}"
-    fi
-}
+# Kill existing screen sessions if they exist
+if screen_exists "arablife-backend"; then
+    screen -S arablife-backend -X quit
+fi
+if screen_exists "arablife-frontend"; then
+    screen -S arablife-frontend -X quit
+fi
 
-# Function to stop the bot
-stop_bot() {
-    echo -e "${YELLOW}Stopping ArabLife bot...${NC}"
-    screen -S arablife -X quit 2>/dev/null || true
-    echo -e "${GREEN}Bot stopped${NC}"
-}
+# Build frontend
+echo -e "${YELLOW}Building frontend...${NC}"
+cd "${DIR}/dashboard/frontend"
+npm run build
 
-# Check command line arguments
-case "$1" in
-    start)
-        if check_screen; then
-            echo -e "${RED}Bot is already running!${NC}"
-            echo -e "To view console: ${GREEN}screen -r arablife${NC}"
-        else
-            start_bot
-        fi
-        ;;
-    stop)
-        if check_screen; then
-            stop_bot
-        else
-            echo -e "${RED}Bot is not running!${NC}"
-        fi
-        ;;
-    restart)
-        if check_screen; then
-            stop_bot
-        fi
-        sleep 2
-        start_bot
-        ;;
-    status)
-        if check_screen; then
-            echo -e "${GREEN}Bot is running!${NC}"
-            echo -e "To view console: ${GREEN}screen -r arablife${NC}"
-        else
-            echo -e "${RED}Bot is not running!${NC}"
-        fi
-        ;;
-    *)
-        echo -e "Usage: $0 {start|stop|restart|status}"
-        echo -e "\nCommands:"
-        echo -e "  ${GREEN}start${NC}   - Start the bot"
-        echo -e "  ${GREEN}stop${NC}    - Stop the bot"
-        echo -e "  ${GREEN}restart${NC} - Restart the bot"
-        echo -e "  ${GREEN}status${NC}  - Check bot status"
-        exit 1
-esac
+# Start backend server
+echo -e "${YELLOW}Starting backend server...${NC}"
+cd "${DIR}/dashboard/backend"
+source venv/bin/activate
+screen -dmS arablife-backend bash -c "cd '${DIR}/dashboard/backend' && source venv/bin/activate && uvicorn app.main:app --host 0.0.0.0 --port 8000"
+deactivate
 
-exit 0
+# Start frontend using serve
+echo -e "${YELLOW}Starting frontend server...${NC}"
+cd "${DIR}/dashboard/frontend"
+if ! command -v serve &> /dev/null; then
+    npm install -g serve
+fi
+screen -dmS arablife-frontend bash -c "cd '${DIR}/dashboard/frontend' && serve -s build -l 3000"
+
+# Wait for servers to start
+sleep 5
+
+# Check if servers are running
+if screen_exists "arablife-backend"; then
+    echo -e "${GREEN}Backend server is running${NC}"
+    echo -e "API available at: ${GREEN}http://45.76.83.149/api${NC}"
+    echo -e "API docs available at: ${GREEN}http://45.76.83.149/docs${NC}"
+else
+    echo -e "${RED}Backend server failed to start${NC}"
+fi
+
+if screen_exists "arablife-frontend"; then
+    echo -e "${GREEN}Frontend server is running${NC}"
+    echo -e "Dashboard available at: ${GREEN}http://45.76.83.149${NC}"
+else
+    echo -e "${RED}Frontend server failed to start${NC}"
+fi
+
+echo -e "\n${YELLOW}To view server logs:${NC}"
+echo -e "Backend: ${GREEN}screen -r arablife-backend${NC}"
+echo -e "Frontend: ${GREEN}screen -r arablife-frontend${NC}"
+echo -e "\nTo detach from a screen session: ${GREEN}Ctrl+A then D${NC}"

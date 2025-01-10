@@ -5,7 +5,7 @@ import logging
 import json
 import asyncio
 from datetime import datetime, timedelta
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Union, Literal
 import aiosqlite
 import os
 import re
@@ -19,117 +19,57 @@ class AutoModCommands(Cog):
     
     def __init__(self, bot):
         self.bot = bot
-        self.settings = {
-            "banned_words": Config.BLACKLISTED_WORDS,
-            "banned_links": [d for d in Config.ALLOWED_DOMAINS if d not in ['discord.com', 'discord.gg']],
-            "spam_threshold": Config.AUTOMOD_SPAM_THRESHOLD,
-            "spam_interval": Config.AUTOMOD_SPAM_INTERVAL,
-            "raid_threshold": Config.AUTOMOD_RAID_THRESHOLD,
-            "raid_interval": Config.AUTOMOD_RAID_INTERVAL,
-            "action_type": Config.AUTOMOD_ACTION,
-            "is_enabled": Config.AUTOMOD_ENABLED
-        }
         self.user_messages = defaultdict(lambda: deque(maxlen=50))  # Track recent messages per user
         self.recent_joins = deque(maxlen=50)  # Track recent joins
-        self.db_path = './bot_dashboard.db'
-        asyncio.create_task(self.setup_database())
+        self.raid_mode = False
+        self.similar_message_threshold = 0.85  # 85% similarity threshold for spam detection
 
-    async def setup_database(self):
-        """Initialize the SQLite database"""
-        try:
-            async with aiosqlite.connect(self.db_path) as db:
-                # Create guild entry if it doesn't exist
-                await db.execute('''
-                    INSERT OR IGNORE INTO guilds (discord_id, name)
-                    VALUES (?, ?)
-                ''', (str(Config.GUILD_ID), "ArabLife"))
+    async def get_settings(self, guild_id: str) -> dict:
+        """Get automod settings for a guild"""
+        async with aiosqlite.connect(db.db_path) as conn:
+            conn.row_factory = aiosqlite.Row
+            async with conn.execute("""
+                SELECT * FROM automod_settings
+                WHERE guild_id = ?
+            """, (guild_id,)) as cursor:
+                settings = await cursor.fetchone()
                 
-                # Create guild settings if they don't exist
-                await db.execute('''
-                    INSERT OR IGNORE INTO guild_settings (guild_id, custom_settings)
-                    SELECT id, '{"automod": ' || ? || '}'
-                    FROM guilds WHERE discord_id = ?
-                ''', (json.dumps(self.settings), str(Config.GUILD_ID)))
+            if not settings:
+                # Create default settings
+                default_settings = {
+                    "banned_words": Config.BLACKLISTED_WORDS,
+                    "banned_links": [d for d in Config.ALLOWED_DOMAINS if d not in ['discord.com', 'discord.gg']],
+                    "spam_threshold": Config.AUTOMOD_SPAM_THRESHOLD,
+                    "spam_interval": Config.AUTOMOD_SPAM_INTERVAL,
+                    "raid_threshold": Config.AUTOMOD_RAID_THRESHOLD,
+                    "raid_interval": Config.AUTOMOD_RAID_INTERVAL,
+                    "action_type": Config.AUTOMOD_ACTION,
+                    "mute_duration": 3600,  # 1 hour default
+                    "exempt_roles": [],
+                    "exempt_channels": [],
+                    "is_enabled": Config.AUTOMOD_ENABLED
+                }
                 
-                # Create automod entry if it doesn't exist
-                await db.execute('''
-                    INSERT OR IGNORE INTO automod (
-                        guild_id,
-                        banned_words,
-                        banned_links,
-                        spam_threshold,
-                        spam_interval,
-                        raid_threshold,
-                        raid_interval,
-                        action_type,
-                        is_enabled
-                    )
-                    SELECT id, ?, ?, ?, ?, ?, ?, ?, ?
-                    FROM guilds WHERE discord_id = ?
-                ''', (
-                    json.dumps(self.settings['banned_words']),
-                    json.dumps(self.settings['banned_links']),
-                    self.settings['spam_threshold'],
-                    self.settings['spam_interval'],
-                    self.settings['raid_threshold'],
-                    self.settings['raid_interval'],
-                    self.settings['action_type'],
-                    self.settings['is_enabled'],
-                    str(Config.GUILD_ID)
-                ))
+                await conn.execute("""
+                    INSERT INTO automod_settings (
+                        guild_id, settings
+                    ) VALUES (?, ?)
+                """, (guild_id, json.dumps(default_settings)))
+                await conn.commit()
                 
-                await db.commit()
-        except Exception as e:
-            logger.error(f"Failed to setup database: {str(e)}")
+                return default_settings
+                
+            return json.loads(settings['settings'])
 
-    async def save_settings(self):
-        """Save current settings to database"""
-        try:
-            async with aiosqlite.connect(self.db_path) as db:
-                # Get guild's database ID
-                async with db.execute(
-                    'SELECT id FROM guilds WHERE discord_id = ?',
-                    (str(Config.GUILD_ID),)
-                ) as cursor:
-                    guild_result = await cursor.fetchone()
-                    if not guild_result:
-                        return
-                    db_guild_id = guild_result[0]
-                
-                # Update automod settings
-                await db.execute('''
-                    UPDATE automod SET
-                        banned_words = ?,
-                        banned_links = ?,
-                        spam_threshold = ?,
-                        spam_interval = ?,
-                        raid_threshold = ?,
-                        raid_interval = ?,
-                        action_type = ?,
-                        is_enabled = ?
-                    WHERE guild_id = ?
-                ''', (
-                    json.dumps(self.settings['banned_words']),
-                    json.dumps(self.settings['banned_links']),
-                    self.settings['spam_threshold'],
-                    self.settings['spam_interval'],
-                    self.settings['raid_threshold'],
-                    self.settings['raid_interval'],
-                    self.settings['action_type'],
-                    self.settings['is_enabled'],
-                    db_guild_id
-                ))
-                
-                # Update guild settings
-                await db.execute('''
-                    UPDATE guild_settings 
-                    SET custom_settings = json_set(custom_settings, '$.automod', ?)
-                    WHERE guild_id = ?
-                ''', (json.dumps(self.settings), db_guild_id))
-                
-                await db.commit()
-        except Exception as e:
-            logger.error(f"Failed to save settings: {str(e)}")
+    async def update_settings(self, guild_id: str, settings: dict):
+        """Update automod settings for a guild"""
+        async with aiosqlite.connect(db.db_path) as conn:
+            await conn.execute("""
+                UPDATE automod_settings
+                SET settings = ?
+                WHERE guild_id = ?
+            """, (json.dumps(settings), guild_id))
+            await conn.commit()
 
     async def log_action(self, guild_id: int, user_id: int, action: str, reason: str):
         """Log automod action to database"""
@@ -153,15 +93,15 @@ class AutoModCommands(Cog):
         except Exception as e:
             logger.error(f"Failed to log action: {str(e)}")
 
-    async def take_action(self, member: discord.Member, reason: str):
+    async def take_action(self, member: discord.Member, reason: str, settings: dict):
         """Take action based on settings"""
-        action = self.settings['action_type']
+        action = settings['action_type']
         
         try:
             if action == 'warn':
                 await member.send(f"⚠️ Warning: {reason}")
             elif action == 'mute':
-                duration = timedelta(hours=1)
+                duration = timedelta(seconds=settings['mute_duration'])
                 await member.timeout(duration, reason=reason)
             elif action == 'kick':
                 await member.kick(reason=reason)
@@ -171,55 +111,114 @@ class AutoModCommands(Cog):
             # Log the action
             await self.log_action(member.guild.id, member.id, action, reason)
             
+            # Send to audit log channel
             if hasattr(Config, 'AUDIT_LOG_CHANNEL_ID'):
                 channel = member.guild.get_channel(Config.AUDIT_LOG_CHANNEL_ID)
                 if channel:
-                    await channel.send(f"🛡️ AutoMod Action: {action.title()}\nUser: {member.mention}\nReason: {reason}")
+                    duration_text = f" for {settings['mute_duration']} seconds" if action == 'mute' else ""
+                    await channel.send(
+                        f"🛡️ AutoMod Action: {action.title()}{duration_text}\n"
+                        f"User: {member.mention}\n"
+                        f"Reason: {reason}"
+                    )
                     
         except discord.Forbidden:
             logger.error(f"Failed to {action} user {member.name}: Missing permissions")
         except Exception as e:
             logger.error(f"Failed to {action} user {member.name}: {str(e)}")
 
+    def is_exempt(self, message: discord.Message, settings: dict) -> bool:
+        """Check if user/channel is exempt from automod"""
+        # Check exempt roles
+        for role in message.author.roles:
+            if str(role.id) in settings['exempt_roles']:
+                return True
+                
+        # Check exempt channels
+        if str(message.channel.id) in settings['exempt_channels']:
+            return True
+            
+        return False
+
+    def message_similarity(self, msg1: str, msg2: str) -> float:
+        """Calculate similarity ratio between two messages"""
+        from difflib import SequenceMatcher
+        return SequenceMatcher(None, msg1.lower(), msg2.lower()).ratio()
+
+    def matches_wildcard(self, text: str, pattern: str) -> bool:
+        """Check if text matches wildcard pattern"""
+        import fnmatch
+        return fnmatch.fnmatch(text.lower(), pattern.lower())
+
     @commands.Cog.listener()
     async def on_message(self, message: discord.Message):
         """Handle message filtering and spam detection"""
-        if not self.settings['is_enabled'] or message.author.bot or not message.guild:
+        if message.author.bot or not message.guild:
             return
             
         try:
+            settings = await self.get_settings(str(message.guild.id))
+            
+            if not settings['is_enabled'] or self.is_exempt(message, settings):
+                return
+            
             # Store message for spam detection
             user_id = message.author.id
             now = datetime.now()
             self.user_messages[user_id].append((message.content, now))
             
             # Check for spam
-            recent_messages = [msg for msg, time in self.user_messages[user_id]
-                             if (now - time).total_seconds() <= self.settings['spam_interval']]
+            recent_messages = [
+                msg for msg, time in self.user_messages[user_id]
+                if (now - time).total_seconds() <= settings['spam_interval']
+            ]
             
-            if len(recent_messages) >= self.settings['spam_threshold']:
-                await message.delete()
-                await self.take_action(
-                    message.author,
-                    f"Spam detected: {len(recent_messages)} messages in {self.settings['spam_interval']} seconds"
-                )
-                return
-                
-            # Check banned words
+            if len(recent_messages) >= settings['spam_threshold']:
+                # Check for message similarity
+                if len(recent_messages) >= 2:
+                    similar_count = 0
+                    for i in range(len(recent_messages)-1):
+                        if self.message_similarity(
+                            recent_messages[i],
+                            recent_messages[i+1]
+                        ) > self.similar_message_threshold:
+                            similar_count += 1
+                            
+                    if similar_count >= settings['spam_threshold'] - 1:
+                        await message.delete()
+                        await self.take_action(
+                            message.author,
+                            f"Spam detected: {len(recent_messages)} similar messages in {settings['spam_interval']} seconds",
+                            settings
+                        )
+                        return
+            
+            # Check banned words with wildcards
             content_lower = message.content.lower()
-            for word in self.settings['banned_words']:
-                if word.lower() in content_lower:
+            for word in settings['banned_words']:
+                if self.matches_wildcard(content_lower, word):
                     await message.delete()
-                    await self.take_action(message.author, f"Banned word detected: {word}")
+                    await self.take_action(
+                        message.author,
+                        f"Banned word/phrase detected: {word}",
+                        settings
+                    )
                     return
                     
             # Check banned links
-            urls = re.findall(r'http[s]?://(?:[a-zA-Z]|[0-9]|[$-_@.&+]|[!*(),]|(?:%[0-9a-fA-F][0-9a-fA-F]))+', message.content)
+            urls = re.findall(
+                r'http[s]?://(?:[a-zA-Z]|[0-9]|[$-_@.&+]|[!*(),]|(?:%[0-9a-fA-F][0-9a-fA-F]))+',
+                message.content
+            )
             for url in urls:
                 domain = url.split('/')[2]
-                if domain in self.settings['banned_links']:
+                if any(self.matches_wildcard(domain, pattern) for pattern in settings['banned_links']):
                     await message.delete()
-                    await self.take_action(message.author, f"Banned link detected: {domain}")
+                    await self.take_action(
+                        message.author,
+                        f"Banned link detected: {domain}",
+                        settings
+                    )
                     return
                     
         except Exception as e:
@@ -228,175 +227,463 @@ class AutoModCommands(Cog):
     @commands.Cog.listener()
     async def on_member_join(self, member: discord.Member):
         """Handle raid detection"""
-        if not self.settings['is_enabled']:
-            return
-            
         try:
+            settings = await self.get_settings(str(member.guild.id))
+            
+            if not settings['is_enabled']:
+                return
+                
             now = datetime.now()
             self.recent_joins.append(now)
             
             # Check for raid
             recent_count = sum(1 for join_time in self.recent_joins
-                             if (now - join_time).total_seconds() <= self.settings['raid_interval'])
+                             if (now - join_time).total_seconds() <= settings['raid_interval'])
             
-            if recent_count >= self.settings['raid_threshold']:
-                # Enable raid mode
-                try:
-                    # Set to highest verification level
-                    await member.guild.edit(verification_level=discord.VerificationLevel.highest)
-                    
-                    if hasattr(Config, 'AUDIT_LOG_CHANNEL_ID'):
-                        channel = member.guild.get_channel(Config.AUDIT_LOG_CHANNEL_ID)
-                        if channel:
-                            await channel.send(
-                                f"🚨 **RAID DETECTED**\n"
-                                f"{recent_count} joins in {self.settings['raid_interval']} seconds\n"
-                                f"Verification level set to highest."
-                            )
-                    
-                    # Log raid detection
-                    await self.log_action(
-                        member.guild.id,
-                        0,  # No specific user
-                        "raid_protection",
-                        f"Raid detected: {recent_count} joins in {self.settings['raid_interval']} seconds"
-                    )
-                    
-                    # Reset after 10 minutes
-                    await asyncio.sleep(600)
-                    await member.guild.edit(verification_level=discord.VerificationLevel.medium)
-                    
-                    if hasattr(Config, 'AUDIT_LOG_CHANNEL_ID'):
-                        channel = member.guild.get_channel(Config.AUDIT_LOG_CHANNEL_ID)
-                        if channel:
-                            await channel.send("✅ Raid protection disabled. Verification level restored.")
+            if recent_count >= settings['raid_threshold']:
+                if not self.raid_mode:  # Only trigger if not already in raid mode
+                    self.raid_mode = True
+                    try:
+                        # Set to highest verification level
+                        await member.guild.edit(verification_level=discord.VerificationLevel.highest)
+                        
+                        if hasattr(Config, 'AUDIT_LOG_CHANNEL_ID'):
+                            channel = member.guild.get_channel(Config.AUDIT_LOG_CHANNEL_ID)
+                            if channel:
+                                await channel.send(
+                                    f"🚨 **تم اكتشاف غارة!**\n"
+                                    f"{recent_count} عضو انضموا خلال {settings['raid_interval']} ثانية\n"
+                                    f"تم رفع مستوى التحقق إلى الأعلى."
+                                )
+                        
+                        # Log raid detection
+                        await self.log_action(
+                            member.guild.id,
+                            0,  # No specific user
+                            "raid_protection",
+                            f"تم اكتشاف غارة: {recent_count} عضو انضموا خلال {settings['raid_interval']} ثانية"
+                        )
+                        
+                        # Reset after 10 minutes
+                        await asyncio.sleep(600)
+                        if self.raid_mode:  # Check if still in raid mode
+                            self.raid_mode = False
+                            await member.guild.edit(verification_level=discord.VerificationLevel.medium)
                             
-                except discord.Forbidden:
-                    logger.error("Failed to enable raid protection: Missing permissions")
-                except Exception as e:
-                    logger.error(f"Failed to enable raid protection: {str(e)}")
+                            if hasattr(Config, 'AUDIT_LOG_CHANNEL_ID'):
+                                channel = member.guild.get_channel(Config.AUDIT_LOG_CHANNEL_ID)
+                                if channel:
+                                    await channel.send("✅ تم تعطيل حماية الغارات. تم استعادة مستوى التحقق.")
+                                    
+                    except discord.Forbidden:
+                        logger.error("Failed to enable raid protection: Missing permissions")
+                    except Exception as e:
+                        logger.error(f"Failed to enable raid protection: {str(e)}")
                     
         except Exception as e:
             logger.error(f"Failed to process member join: {str(e)}")
 
-    @commands.hybrid_command()
-    @commands.has_permissions(administrator=True)
-    async def automod(self, ctx: commands.Context, setting: str, value: str):
-        """Configure AutoMod settings (Admin only)"""
+    @app_commands.command(
+        name="automod_toggle",
+        description="Enable or disable AutoMod"
+    )
+    @app_commands.checks.has_permissions(administrator=True)
+    async def automod_toggle(
+        self,
+        interaction: discord.Interaction,
+        enabled: bool
+    ):
+        """Toggle AutoMod on/off"""
         try:
-            setting = setting.lower()
+            settings = await self.get_settings(str(interaction.guild_id))
+            settings['is_enabled'] = enabled
+            await self.update_settings(str(interaction.guild_id), settings)
             
-            if setting == "enable":
-                self.settings['is_enabled'] = value.lower() == "true"
-                await ctx.send(f"AutoMod {'enabled' if self.settings['is_enabled'] else 'disabled'}")
-                
-            elif setting == "action":
-                if value not in ["warn", "mute", "kick", "ban"]:
-                    await ctx.send("Invalid action type. Use: warn, mute, kick, or ban")
-                    return
-                self.settings['action_type'] = value
-                await ctx.send(f"AutoMod action set to: {value}")
-                
-            elif setting == "addword":
-                if value not in self.settings['banned_words']:
-                    self.settings['banned_words'].append(value)
-                    await ctx.send(f"Added '{value}' to banned words")
-                else:
-                    await ctx.send("Word already banned")
-                    
-            elif setting == "removeword":
-                if value in self.settings['banned_words']:
-                    self.settings['banned_words'].remove(value)
-                    await ctx.send(f"Removed '{value}' from banned words")
-                else:
-                    await ctx.send("Word not found in banned list")
-                    
-            elif setting == "addlink":
-                if value not in self.settings['banned_links']:
-                    self.settings['banned_links'].append(value)
-                    await ctx.send(f"Added '{value}' to banned links")
-                else:
-                    await ctx.send("Link already banned")
-                    
-            elif setting == "removelink":
-                if value in self.settings['banned_links']:
-                    self.settings['banned_links'].remove(value)
-                    await ctx.send(f"Removed '{value}' from banned links")
-                else:
-                    await ctx.send("Link not found in banned list")
-                    
-            else:
-                await ctx.send("Invalid setting. Available settings: enable, action, addword, removeword, addlink, removelink")
-                return
-                
-            await self.save_settings()
-            
+            await interaction.response.send_message(
+                f"*تم {'تفعيل' if enabled else 'تعطيل'} نظام المراقبة التلقائية.*"
+            )
         except Exception as e:
-            logger.error(f"Failed to update automod settings: {str(e)}")
-            await ctx.send("An error occurred while updating settings.")
+            logger.error(f"Failed to toggle automod: {str(e)}")
+            await interaction.response.send_message(
+                "*حدث خطأ أثناء تحديث الإعدادات.*",
+                ephemeral=True
+            )
 
-    @commands.hybrid_command()
-    @commands.has_permissions(administrator=True)
-    async def automodstatus(self, ctx: commands.Context):
-        """Show current AutoMod settings (Admin only)"""
+    @app_commands.command(
+        name="automod_action",
+        description="Set the action to take when a rule is violated"
+    )
+    @app_commands.checks.has_permissions(administrator=True)
+    async def set_action(
+        self,
+        interaction: discord.Interaction,
+        action: Literal["warn", "mute", "kick", "ban"],
+        mute_duration: Optional[int] = None
+    ):
+        """Set AutoMod action and mute duration"""
         try:
-            async with aiosqlite.connect(self.db_path) as db:
-                # Get guild's database ID
-                async with db.execute(
-                    'SELECT id FROM guilds WHERE discord_id = ?',
-                    (str(ctx.guild.id),)
-                ) as cursor:
-                    guild_result = await cursor.fetchone()
-                    if not guild_result:
-                        await ctx.send("Guild not found in database!")
-                        return
-                    db_guild_id = guild_result[0]
+            settings = await self.get_settings(str(interaction.guild_id))
+            settings['action_type'] = action
+            
+            if action == "mute" and mute_duration:
+                settings['mute_duration'] = max(60, min(mute_duration, 2419200))  # 1 min to 28 days
                 
-                embed = discord.Embed(title="AutoMod Status", color=discord.Color.blue())
+            await self.update_settings(str(interaction.guild_id), settings)
+            
+            duration_text = f" لمدة {mute_duration} ثانية" if action == "mute" and mute_duration else ""
+            await interaction.response.send_message(
+                f"*تم تعيين إجراء المراقبة التلقائية إلى: {action}{duration_text}*"
+            )
+        except Exception as e:
+            logger.error(f"Failed to set action: {str(e)}")
+            await interaction.response.send_message(
+                "*حدث خطأ أثناء تحديث الإعدادات.*",
+                ephemeral=True
+            )
+
+    @app_commands.command(
+        name="automod_exempt",
+        description="Add/remove role or channel exemption from AutoMod"
+    )
+    @app_commands.checks.has_permissions(administrator=True)
+    async def manage_exempt(
+        self,
+        interaction: discord.Interaction,
+        action: Literal["add", "remove"],
+        target: Union[discord.Role, discord.TextChannel]
+    ):
+        """Manage AutoMod exemptions"""
+        try:
+            settings = await self.get_settings(str(interaction.guild_id))
+            
+            if isinstance(target, discord.Role):
+                exempt_list = settings['exempt_roles']
+                target_type = "role"
+            else:
+                exempt_list = settings['exempt_channels']
+                target_type = "channel"
                 
-                embed.add_field(name="Status", value="Enabled" if self.settings['is_enabled'] else "Disabled", inline=True)
-                embed.add_field(name="Action", value=self.settings['action_type'].title(), inline=True)
+            target_id = str(target.id)
+            
+            if action == "add":
+                if target_id not in exempt_list:
+                    exempt_list.append(target_id)
+                    action_text = "إضافة"
+                else:
+                    await interaction.response.send_message(
+                        f"*{target.name} معفى بالفعل.*",
+                        ephemeral=True
+                    )
+                    return
+            else:
+                if target_id in exempt_list:
+                    exempt_list.remove(target_id)
+                    action_text = "إزالة"
+                else:
+                    await interaction.response.send_message(
+                        f"*{target.name} غير معفى.*",
+                        ephemeral=True
+                    )
+                    return
+                    
+            if isinstance(target, discord.Role):
+                settings['exempt_roles'] = exempt_list
+            else:
+                settings['exempt_channels'] = exempt_list
                 
+            await self.update_settings(str(interaction.guild_id), settings)
+            
+            await interaction.response.send_message(
+                f"*تم {action_text} {target.name} من قائمة الإعفاء.*"
+            )
+        except Exception as e:
+            logger.error(f"Failed to manage exemptions: {str(e)}")
+            await interaction.response.send_message(
+                "*حدث خطأ أثناء تحديث الإعدادات.*",
+                ephemeral=True
+            )
+
+    @app_commands.command(
+        name="automod_word",
+        description="Add/remove banned word or phrase (supports wildcards)"
+    )
+    @app_commands.checks.has_permissions(administrator=True)
+    async def manage_words(
+        self,
+        interaction: discord.Interaction,
+        action: Literal["add", "remove"],
+        word: str
+    ):
+        """Manage banned words"""
+        try:
+            settings = await self.get_settings(str(interaction.guild_id))
+            
+            if action == "add":
+                if word not in settings['banned_words']:
+                    settings['banned_words'].append(word)
+                    action_text = "إضافة"
+                else:
+                    await interaction.response.send_message(
+                        "*هذه الكلمة محظورة بالفعل.*",
+                        ephemeral=True
+                    )
+                    return
+            else:
+                if word in settings['banned_words']:
+                    settings['banned_words'].remove(word)
+                    action_text = "إزالة"
+                else:
+                    await interaction.response.send_message(
+                        "*هذه الكلمة غير موجودة في القائمة المحظورة.*",
+                        ephemeral=True
+                    )
+                    return
+                    
+            await self.update_settings(str(interaction.guild_id), settings)
+            
+            await interaction.response.send_message(
+                f"*تم {action_text} '{word}' من الكلمات المحظورة.*"
+            )
+        except Exception as e:
+            logger.error(f"Failed to manage words: {str(e)}")
+            await interaction.response.send_message(
+                "*حدث خطأ أثناء تحديث الإعدادات.*",
+                ephemeral=True
+            )
+
+    @app_commands.command(
+        name="automod_link",
+        description="Add/remove banned domain (supports wildcards)"
+    )
+    @app_commands.checks.has_permissions(administrator=True)
+    async def manage_links(
+        self,
+        interaction: discord.Interaction,
+        action: Literal["add", "remove"],
+        domain: str
+    ):
+        """Manage banned domains"""
+        try:
+            settings = await self.get_settings(str(interaction.guild_id))
+            
+            if action == "add":
+                if domain not in settings['banned_links']:
+                    settings['banned_links'].append(domain)
+                    action_text = "إضافة"
+                else:
+                    await interaction.response.send_message(
+                        "*هذا النطاق محظور بالفعل.*",
+                        ephemeral=True
+                    )
+                    return
+            else:
+                if domain in settings['banned_links']:
+                    settings['banned_links'].remove(domain)
+                    action_text = "إزالة"
+                else:
+                    await interaction.response.send_message(
+                        "*هذا النطاق غير موجود في القائمة المحظورة.*",
+                        ephemeral=True
+                    )
+                    return
+                    
+            await self.update_settings(str(interaction.guild_id), settings)
+            
+            await interaction.response.send_message(
+                f"*تم {action_text} '{domain}' من النطاقات المحظورة.*"
+            )
+        except Exception as e:
+            logger.error(f"Failed to manage links: {str(e)}")
+            await interaction.response.send_message(
+                "*حدث خطأ أثناء تحديث الإعدادات.*",
+                ephemeral=True
+            )
+
+    @app_commands.command(
+        name="automod_status",
+        description="Show current AutoMod settings"
+    )
+    @app_commands.checks.has_permissions(administrator=True)
+    async def automod_status(self, interaction: discord.Interaction):
+        """Show current AutoMod settings"""
+        try:
+            settings = await self.get_settings(str(interaction.guild_id))
+            
+            embed = discord.Embed(
+                title="حالة المراقبة التلقائية",
+                color=discord.Color.blue()
+            )
+            
+            # Basic settings
+            embed.add_field(
+                name="الحالة",
+                value="مفعل" if settings['is_enabled'] else "معطل",
+                inline=True
+            )
+            
+            action_text = settings['action_type']
+            if action_text == "mute":
+                action_text += f" ({settings['mute_duration']} ثانية)"
+            embed.add_field(name="الإجراء", value=action_text, inline=True)
+            
+            # Protection settings
+            embed.add_field(
+                name="الحماية من السبام",
+                value=f"{settings['spam_threshold']} رسائل في {settings['spam_interval']} ثانية",
+                inline=False
+            )
+            
+            embed.add_field(
+                name="الحماية من الغارات",
+                value=f"{settings['raid_threshold']} انضمام في {settings['raid_interval']} ثانية",
+                inline=False
+            )
+            
+            # Exemptions
+            exempt_roles = []
+            for role_id in settings['exempt_roles']:
+                role = interaction.guild.get_role(int(role_id))
+                if role:
+                    exempt_roles.append(role.mention)
+            
+            exempt_channels = []
+            for channel_id in settings['exempt_channels']:
+                channel = interaction.guild.get_channel(int(channel_id))
+                if channel:
+                    exempt_channels.append(channel.mention)
+            
+            if exempt_roles:
                 embed.add_field(
-                    name="Spam Protection",
-                    value=f"{self.settings['spam_threshold']} messages in {self.settings['spam_interval']}s",
+                    name="الرتب المعفاة",
+                    value=", ".join(exempt_roles),
                     inline=False
                 )
-                
+            
+            if exempt_channels:
                 embed.add_field(
-                    name="Raid Protection",
-                    value=f"{self.settings['raid_threshold']} joins in {self.settings['raid_interval']}s",
+                    name="القنوات المعفاة",
+                    value=", ".join(exempt_channels),
                     inline=False
                 )
-                
-                banned_words = ", ".join(self.settings['banned_words']) or "None"
-                embed.add_field(name="Banned Words", value=banned_words, inline=False)
-                
-                banned_links = ", ".join(self.settings['banned_links']) or "None"
-                embed.add_field(name="Banned Links", value=banned_links, inline=False)
-                
-                # Get recent actions
-                async with db.execute('''
+            
+            # Filters
+            banned_words = ", ".join(f"`{w}`" for w in settings['banned_words']) or "لا يوجد"
+            embed.add_field(
+                name="الكلمات المحظورة",
+                value=banned_words,
+                inline=False
+            )
+            
+            banned_links = ", ".join(f"`{d}`" for d in settings['banned_links']) or "لا يوجد"
+            embed.add_field(
+                name="النطاقات المحظورة",
+                value=banned_links,
+                inline=False
+            )
+            
+            # Recent actions
+            async with aiosqlite.connect(db.db_path) as conn:
+                conn.row_factory = aiosqlite.Row
+                async with conn.execute("""
                     SELECT action, reason, timestamp
                     FROM automod_logs
                     WHERE guild_id = ?
                     ORDER BY timestamp DESC
                     LIMIT 5
-                ''', (db_guild_id,)) as cursor:
+                """, (str(interaction.guild_id),)) as cursor:
                     recent_actions = await cursor.fetchall()
-                    
-                if recent_actions:
-                    actions_text = "\n".join(
-                        f"{action.title()}: {reason} ({timestamp.split('T')[0]})"
-                        for action, reason, timestamp in recent_actions
-                    )
-                    embed.add_field(name="Recent Actions", value=actions_text, inline=False)
-                
-                await ctx.send(embed=embed)
-                
+            
+            if recent_actions:
+                actions_text = "\n".join(
+                    f"{action.title()}: {reason} ({timestamp.split('T')[0]})"
+                    for action, reason, timestamp in recent_actions
+                )
+                embed.add_field(
+                    name="الإجراءات الأخيرة",
+                    value=actions_text,
+                    inline=False
+                )
+            
+            await interaction.response.send_message(embed=embed)
+            
         except Exception as e:
             logger.error(f"Failed to show automod status: {str(e)}")
-            await ctx.send("An error occurred while fetching automod status.")
+            await interaction.response.send_message(
+                "*حدث خطأ أثناء عرض الإعدادات.*",
+                ephemeral=True
+            )
+
+    @app_commands.command(
+        name="automod_spam",
+        description="Configure spam detection settings"
+    )
+    @app_commands.checks.has_permissions(administrator=True)
+    async def set_spam_settings(
+        self,
+        interaction: discord.Interaction,
+        messages: Optional[int] = None,
+        interval: Optional[int] = None,
+        similarity: Optional[float] = None
+    ):
+        """Configure spam detection settings"""
+        try:
+            settings = await self.get_settings(str(interaction.guild_id))
+            
+            if messages is not None:
+                settings['spam_threshold'] = max(2, min(messages, 10))
+            if interval is not None:
+                settings['spam_interval'] = max(5, min(interval, 30))
+            if similarity is not None:
+                self.similar_message_threshold = max(0.5, min(similarity, 1.0))
+                
+            await self.update_settings(str(interaction.guild_id), settings)
+            
+            await interaction.response.send_message(
+                f"*تم تحديث إعدادات الحماية من السبام:*\n"
+                f"• عدد الرسائل: {settings['spam_threshold']}\n"
+                f"• الفترة الزمنية: {settings['spam_interval']} ثانية\n"
+                f"• نسبة التشابه: {self.similar_message_threshold * 100}%"
+            )
+        except Exception as e:
+            logger.error(f"Failed to set spam settings: {str(e)}")
+            await interaction.response.send_message(
+                "*حدث خطأ أثناء تحديث الإعدادات.*",
+                ephemeral=True
+            )
+
+    @app_commands.command(
+        name="automod_raid",
+        description="Configure raid protection settings"
+    )
+    @app_commands.checks.has_permissions(administrator=True)
+    async def set_raid_settings(
+        self,
+        interaction: discord.Interaction,
+        joins: Optional[int] = None,
+        interval: Optional[int] = None
+    ):
+        """Configure raid protection settings"""
+        try:
+            settings = await self.get_settings(str(interaction.guild_id))
+            
+            if joins is not None:
+                settings['raid_threshold'] = max(3, min(joins, 20))
+            if interval is not None:
+                settings['raid_interval'] = max(10, min(interval, 60))
+                
+            await self.update_settings(str(interaction.guild_id), settings)
+            
+            await interaction.response.send_message(
+                f"*تم تحديث إعدادات الحماية من الغارات:*\n"
+                f"• عدد الانضمامات: {settings['raid_threshold']}\n"
+                f"• الفترة الزمنية: {settings['raid_interval']} ثانية"
+            )
+        except Exception as e:
+            logger.error(f"Failed to set raid settings: {str(e)}")
+            await interaction.response.send_message(
+                "*حدث خطأ أثناء تحديث الإعدادات.*",
+                ephemeral=True
+            )
 
 async def setup(bot):
     await bot.add_cog(AutoModCommands(bot))

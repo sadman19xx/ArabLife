@@ -1,17 +1,20 @@
 #!/bin/bash
 
-# Git operations if needed
-if [[ -d .git ]] && [[ "${AUTO_UPDATE}" == "1" ]]; then
-    echo "Pulling latest changes..."
-    git pull
+# Exit on error
+set -e
+
+# Activate virtual environment if it exists
+if [ -d "venv" ]; then
+    source venv/bin/activate
 fi
 
-# Install dependencies
-if [[ -f requirements.txt ]]; then
-    echo "Installing dependencies..."
-    pip install --disable-pip-version-check -U --prefix .local -r requirements.txt
+# Check if .env file exists
+if [ ! -f .env ]; then
+    echo "Error: .env file not found"
+    echo "Please run setup.sh first"
+    exit 1
 fi
 
-# Start the bot
-echo "Starting bot..."
-/usr/local/bin/python /home/container/bot.py
+# Run the bot
+echo "Starting ArabLife Discord Bot..."
+python3 bot.py

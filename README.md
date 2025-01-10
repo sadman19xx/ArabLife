@@ -1,200 +1,270 @@
 # ArabLife Discord Bot
 
-A Discord bot for managing roles, voice channels, tickets, and more.
-
-## Quick Setup
-
-1. Make scripts executable:
-```bash
-chmod +x *.sh dashboard/frontend/setup-frontend.sh
-```
-
-2. Copy requirements to backend directory:
-```bash
-./copy-requirements.sh
-```
-
-3. Run server setup:
-```bash
-sudo ./setup-server.sh
-```
-
-4. Start the dashboard:
-```bash
-./dev.sh
-```
-
-The dashboard will be available at:
-- Web Interface: http://45.76.83.149
-- API Documentation: http://45.76.83.149/docs
-
-## Detailed Setup Steps
-
-### 1. Create Discord Bot Application
-
-1. Go to [Discord Developer Portal](https://discord.com/developers/applications)
-2. Click "New Application"
-   - Name your application (e.g., "ArabLife")
-   - Click "Create"
-3. Go to "Bot" section in left sidebar
-   - Click "Add Bot"
-   - Click "Yes, do it!"
-4. Under the bot's username:
-   - Click "Copy" to copy your bot token
-   - Save this token - you'll need it during installation
-5. Enable Required Intents:
-   - PRESENCE INTENT
-   - SERVER MEMBERS INTENT
-   - MESSAGE CONTENT INTENT
-6. Add Bot to Your Server:
-   - Go to "OAuth2" → "URL Generator"
-   - Select scopes: "bot" and "applications.commands"
-   - Select bot permissions:
-     * Manage Roles
-     * Manage Channels
-     * View Channels
-     * Send Messages
-     * Manage Messages
-     * Read Message History
-     * Connect
-     * Speak
-   - Copy generated URL
-   - Open URL in browser to add bot to your server
-
-### 2. Get Required IDs
-
-1. Enable Discord Developer Mode:
-   - Open Discord Settings
-   - Go to "App Settings" → "Advanced"
-   - Enable "Developer Mode"
-
-2. Get Server (Guild) ID:
-   - Right-click your server name
-   - Click "Copy ID"
-
-3. Get Role IDs:
-   - Right-click each role
-   - Click "Copy ID"
-   - You'll need:
-     * Allowed Role IDs (can be multiple, separate with commas)
-     * Role ID to Give
-     * Role ID Remove Allowed
-
-4. Get Channel IDs:
-   - Right-click each channel
-   - Click "Copy ID"
-   - You'll need:
-     * Role Activity Log Channel ID
-     * Audit Log Channel ID
-
-### 3. Server Setup
-
-The setup process will:
-1. Install system dependencies (Python, Node.js, nginx)
-2. Configure nginx as a reverse proxy
-3. Set up Python virtual environment
-4. Install Python dependencies
-5. Set up frontend development environment
-6. Configure permissions
-
-### 4. Running the Bot
-
-Start everything with one command:
-```bash
-./dev.sh
-```
-
-This will:
-- Start the FastAPI backend server
-- Start the React frontend server
-- Configure nginx routing
-- Set up all required services
+A custom Discord bot based on MEE6 functionality, with enhanced features and Arabic language support.
 
 ## Features
 
-- Role management
-- Voice channel controls
-- Ticket system
-- Welcome messages
-- Security features
-- Leveling system
-- Auto-moderation
+- **Advanced AutoMod**
+  - Customizable word/domain filters with wildcard support
+  - Message similarity detection for spam prevention
+  - Role and channel exemptions
+  - Configurable mute durations
+  - Raid protection
 
-## Development
+- **Leveling System**
+  - Channel-specific XP rates
+  - Role-based XP multipliers
+  - Customizable role rewards
+  - Visual progress tracking
+  - Detailed rank cards
 
-The development environment includes:
+- **Custom Commands**
+  - Admin management interface
+  - Permission controls
+  - Command usage tracking
 
-1. Backend (FastAPI):
-- Running on port 8000
-- Auto-reload enabled
-- API documentation at /docs
+- **Welcome System**
+  - Customizable welcome messages
+  - Welcome images with user avatars
+  - Role assignment
 
-2. Frontend (React):
-- Running on port 80 (through nginx)
-- Hot reload enabled
-- Material-UI components
+- **Ticket System**
+  - Department-based routing
+  - Staff management
+  - Ticket logging
 
-3. Nginx Configuration:
-- Reverse proxy for both services
-- Proper header forwarding
-- WebSocket support
+## Requirements
 
-## Troubleshooting
+### Bot Requirements
+- Python 3.8 or higher
+- FFmpeg (for voice features)
+- Ubuntu Server 20.04 or higher
 
-If you encounter issues:
+### Dashboard Requirements
+- Node.js 18 or higher
+- Nginx
+- Domain name for dashboard access
+- SSL certificate (recommended)
 
-1. Check services status:
+## Step-by-Step Installation
+
+### 1. System Preparation
+
 ```bash
-sudo systemctl status nginx  # Check nginx
-./start.sh status          # Check bot status
+# Update system
+sudo apt update
+sudo apt upgrade -y
+
+# Install required system packages
+sudo apt install -y python3 python3-pip python3-venv ffmpeg nginx certbot python3-certbot-nginx
+
+# Install Node.js 18
+curl -fsSL https://deb.nodesource.com/setup_18.x | sudo -E bash -
+sudo apt install -y nodejs
+
+# Verify installations
+python3 --version
+node --version
+npm --version
+nginx -v
 ```
 
-2. View logs:
+### 2. Bot Installation
+
 ```bash
-# Nginx logs
-sudo tail -f /var/log/nginx/error.log
+# Clone repository
+git clone https://github.com/yourusername/arablife-bot.git
+cd arablife-bot
 
-# Bot logs
-screen -r arablife
+# Make scripts executable
+chmod +x setup.sh run.sh dev.sh
+chmod +x dashboard/setup.sh
 
-# Backend logs
+# Run bot setup
+./setup.sh
+
+# Copy and edit environment file
+cp .env.example .env
+nano .env
+```
+
+Configure your `.env` file with:
+```env
+TOKEN=your_bot_token
+GUILD_ID=your_guild_id
+ROLE_IDS_ALLOWED=role1,role2
+ROLE_ID_TO_GIVE=role_id
+ROLE_ID_REMOVE_ALLOWED=role_id
+ROLE_ACTIVITY_LOG_CHANNEL_ID=channel_id
+AUDIT_LOG_CHANNEL_ID=channel_id
+WELCOME_CHANNEL_ID=channel_id
+WELCOME_BACKGROUND_URL=url_to_background
+```
+
+### 3. Dashboard Installation
+
+```bash
+# Navigate to dashboard directory
+cd dashboard
+
+# Run dashboard setup
+./setup.sh
+
+# Configure frontend environment
+cd frontend
+cp .env.example .env
+nano .env
+
+# Configure backend environment
+cd ../backend
+cp .env.example .env
+nano .env
+```
+
+Configure frontend `.env`:
+```env
+REACT_APP_API_URL=https://your-domain/api
+REACT_APP_DISCORD_CLIENT_ID=your_client_id
+REACT_APP_DISCORD_REDIRECT_URI=https://your-domain/callback
+```
+
+Configure backend `.env`:
+```env
+DATABASE_URL=sqlite:///./dashboard.db
+DISCORD_CLIENT_ID=your_client_id
+DISCORD_CLIENT_SECRET=your_client_secret
+DISCORD_REDIRECT_URI=https://your-domain/callback
+JWT_SECRET=your_secure_secret
+```
+
+### 4. SSL Setup
+
+```bash
+# Install SSL certificate
+sudo certbot --nginx -d your-domain.com
+
+# Test renewal
+sudo certbot renew --dry-run
+```
+
+### 5. Start Services
+
+```bash
+# Start bot service
+sudo systemctl start arablife-bot
+sudo systemctl enable arablife-bot
+
+# Start dashboard API
+sudo systemctl start arablife-dashboard-api
+sudo systemctl enable arablife-dashboard-api
+
+# Start/reload nginx
+sudo systemctl reload nginx
+```
+
+### 6. Verify Installation
+
+```bash
+# Check bot status
+sudo systemctl status arablife-bot
+
+# Check API status
+sudo systemctl status arablife-dashboard-api
+
+# Check nginx status
+sudo systemctl status nginx
+
+# View logs
+sudo journalctl -u arablife-bot -f
+sudo journalctl -u arablife-dashboard-api -f
+```
+
+## Development Mode
+
+### Bot Development
+```bash
+# Run bot with auto-reload
+./dev.sh
+```
+
+### Dashboard Development
+```bash
+# Run backend API
 cd dashboard/backend
 source venv/bin/activate
-python3 -m uvicorn app.main:app --reload
+uvicorn app.main:app --reload
 
-# Frontend logs
+# Run frontend
 cd dashboard/frontend
 npm start
 ```
 
-3. Common Issues:
-   - Port 80 in use: Check nginx configuration
-   - Missing dependencies: Run setup-server.sh again
-   - Virtual environment issues: Delete venv directory and rerun setup
-   - Permission issues: Check file ownership and permissions
+## Commands
 
-4. Reset Setup:
-```bash
-# Stop all services
-./start.sh stop
-sudo systemctl stop nginx
+### AutoMod Commands
+- `/automod_toggle` - Enable/disable AutoMod
+- `/automod_action` - Set action for violations
+- `/automod_exempt` - Add/remove role or channel exemptions
+- `/automod_word` - Manage banned words/phrases
+- `/automod_link` - Manage banned domains
+- `/automod_spam` - Configure spam detection
+- `/automod_raid` - Configure raid protection
+- `/automod_status` - View current settings
 
-# Clean up
-rm -rf dashboard/backend/venv
-rm -rf dashboard/frontend/node_modules
+### Leveling Commands
+- `/rank` - Check your or another user's rank
+- `/leaderboard` - Show server leaderboard
+- `/setxp` - Set a user's XP (Admin)
+- `/setmultiplier` - Set XP multiplier for role/channel
 
-# Restart setup
-./copy-requirements.sh
-sudo ./setup-server.sh
-./dev.sh
-```
+### Custom Commands
+- `/addcommand` - Add a custom command
+- `/editcommand` - Edit existing command
+- `/removecommand` - Remove a command
+- `/listcommands` - List all custom commands
+- `/commandinfo` - Get command details
 
-## Security Notes
+### Welcome Commands
+- `/setwelcomechannel` - Set welcome message channel
+- `/setwelcomebackground` - Set welcome image background
+- `/testwelcome` - Test welcome message
 
-- Keep your bot token secret
-- Never share your .env file
-- Reset token if accidentally exposed
-- Regularly check bot permissions
-- Monitor audit logs for unusual activity
-- Keep the server updated
-- Use strong SSH keys for server access
+## Troubleshooting
+
+### Common Issues
+
+1. Bot won't start:
+   - Check logs: `sudo journalctl -u arablife-bot -f`
+   - Verify .env configuration
+   - Check Python virtual environment
+
+2. Dashboard API issues:
+   - Check logs: `sudo journalctl -u arablife-dashboard-api -f`
+   - Verify database connection
+   - Check Discord OAuth2 settings
+
+3. Frontend not loading:
+   - Check nginx error logs: `sudo tail -f /var/log/nginx/error.log`
+   - Verify API URL in frontend .env
+   - Check SSL certificate status
+
+4. Permission issues:
+   - Check file permissions in project directory
+   - Verify systemd service user permissions
+   - Check nginx worker permissions
+
+## Support
+
+For support:
+1. Check the troubleshooting section above
+2. Join our Discord server
+3. Open an issue on GitHub
+4. Check the logs for detailed error messages
+
+## Contributing
+
+1. Fork the repository
+2. Create your feature branch
+3. Commit your changes
+4. Push to the branch
+5. Create a new Pull Request
