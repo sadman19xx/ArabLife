@@ -34,34 +34,39 @@ cleanup() {
 
 trap cleanup SIGINT SIGTERM
 
+# Get the directory of the script
+DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
+
 # Setup backend
 echo -e "${YELLOW}Setting up backend...${NC}"
-cd dashboard/backend
 
-# Create and activate virtual environment
-if [ ! -d "venv" ]; then
+# Create and activate virtual environment in the backend directory
+if [ ! -d "${DIR}/dashboard/backend/venv" ]; then
     echo -e "${YELLOW}Creating virtual environment...${NC}"
+    cd "${DIR}/dashboard/backend"
     python3 -m venv venv
+    cd "${DIR}"
 fi
 
 # Activate virtual environment
-source venv/bin/activate || {
+source "${DIR}/dashboard/backend/venv/bin/activate" || {
     echo -e "${RED}Failed to activate virtual environment${NC}"
     exit 1
 }
 
 # Install backend dependencies
 echo -e "${YELLOW}Installing backend dependencies...${NC}"
+cd "${DIR}/dashboard/backend"
 pip install -r requirements.txt || {
     echo -e "${RED}Failed to install backend dependencies${NC}"
     exit 1
 }
 
-cd ../..
+cd "${DIR}"
 
 # Setup frontend
 echo -e "${YELLOW}Setting up frontend...${NC}"
-cd dashboard/frontend
+cd "${DIR}/dashboard/frontend"
 
 # Create frontend .env file
 echo -e "${YELLOW}Creating frontend environment configuration...${NC}"
@@ -78,17 +83,17 @@ fi
 # Create public directory if it doesn't exist
 mkdir -p public
 
-cd ../..
+cd "${DIR}"
 
 # Start backend server
 echo -e "${YELLOW}Starting backend server...${NC}"
-cd dashboard/backend
+cd "${DIR}/dashboard/backend"
 source venv/bin/activate
 python3 -m uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload &
 
 # Start frontend server
 echo -e "${YELLOW}Starting frontend server...${NC}"
-cd ../frontend
+cd "${DIR}/dashboard/frontend"
 PORT=80 HOST=${SERVER_IP} npm start &
 
 echo -e "${GREEN}Development servers are running!${NC}"

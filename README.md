@@ -2,90 +2,33 @@
 
 A Discord bot for managing roles, voice channels, tickets, and more.
 
-## Server Setup
+## Quick Setup
 
-Before installing the bot, you need to set up the server:
-
-1. Connect to the server:
+1. Make scripts executable:
 ```bash
-ssh root@45.76.83.149
+chmod +x *.sh dashboard/frontend/setup-frontend.sh
 ```
 
-2. Clone the repository:
+2. Copy requirements to backend directory:
 ```bash
-git clone https://github.com/your-username/ArabLife.git
-cd ArabLife
+./copy-requirements.sh
 ```
 
-3. Make scripts executable:
-```bash
-chmod +x setup-server.sh install.sh start.sh dev.sh dashboard/frontend/setup-frontend.sh
-```
-
-4. Run the server setup script:
+3. Run server setup:
 ```bash
 sudo ./setup-server.sh
 ```
-This will:
-- Install system dependencies (Python, Node.js, nginx, etc.)
-- Configure nginx as a reverse proxy
-- Set up proper port forwarding
 
-## Installation Methods
-
-After setting up the server, you can install and manage the bot in two ways:
-
-### Method 1: Web Dashboard (Recommended)
-
-1. Start the development servers:
+4. Start the dashboard:
 ```bash
 ./dev.sh
 ```
 
-2. Access the dashboard:
-```
-http://45.76.83.149
-```
+The dashboard will be available at:
+- Web Interface: http://45.76.83.149
+- API Documentation: http://45.76.83.149/docs
 
-The web interface provides:
-- Easy bot installation and configuration
-- Real-time bot status monitoring
-- Start/stop controls
-- Live log viewer
-
-3. Navigate to "Bot Installation" in the sidebar
-4. Fill in the required information:
-   - Bot Token (see "Getting Required Information" below)
-   - Server ID
-   - Role IDs
-   - Channel IDs
-5. Click "Install Bot" to set up the bot
-6. Use the control panel to start/stop the bot and view logs
-
-### Method 2: Command Line
-
-If you prefer using the command line:
-
-1. Run the installation script:
-```bash
-sudo ./install.sh
-```
-
-2. During installation, you'll be prompted for:
-   - Discord Bot Token
-   - Server ID
-   - Role IDs
-   - Channel IDs
-
-3. After installation, use these commands to manage the bot:
-```bash
-./start.sh start    # Start the bot
-./start.sh stop     # Stop the bot
-./start.sh restart  # Restart the bot
-./start.sh status   # Check bot status
-```
-
-## Getting Required Information
+## Detailed Setup Steps
 
 ### 1. Create Discord Bot Application
 
@@ -144,6 +87,29 @@ sudo ./install.sh
      * Role Activity Log Channel ID
      * Audit Log Channel ID
 
+### 3. Server Setup
+
+The setup process will:
+1. Install system dependencies (Python, Node.js, nginx)
+2. Configure nginx as a reverse proxy
+3. Set up Python virtual environment
+4. Install Python dependencies
+5. Set up frontend development environment
+6. Configure permissions
+
+### 4. Running the Bot
+
+Start everything with one command:
+```bash
+./dev.sh
+```
+
+This will:
+- Start the FastAPI backend server
+- Start the React frontend server
+- Configure nginx routing
+- Set up all required services
+
 ## Features
 
 - Role management
@@ -156,67 +122,72 @@ sudo ./install.sh
 
 ## Development
 
-To work on the bot's code:
+The development environment includes:
 
-1. Start development servers:
-```bash
-./dev.sh
-```
+1. Backend (FastAPI):
+- Running on port 8000
+- Auto-reload enabled
+- API documentation at /docs
 
-This will:
-- Start the FastAPI backend server (http://45.76.83.149:8000)
-- Start the React frontend server (http://45.76.83.149)
-- Watch for changes and reload automatically
+2. Frontend (React):
+- Running on port 80 (through nginx)
+- Hot reload enabled
+- Material-UI components
 
-2. Access the API documentation:
-- OpenAPI docs: http://45.76.83.149:8000/docs
-- ReDoc: http://45.76.83.149:8000/redoc
+3. Nginx Configuration:
+- Reverse proxy for both services
+- Proper header forwarding
+- WebSocket support
 
 ## Troubleshooting
 
 If you encounter issues:
 
-1. Check the server setup:
+1. Check services status:
 ```bash
-sudo nginx -t              # Test nginx configuration
-sudo systemctl status nginx # Check nginx status
+sudo systemctl status nginx  # Check nginx
+./start.sh status          # Check bot status
 ```
 
-2. Check the bot's status:
+2. View logs:
 ```bash
-./start.sh status
-```
+# Nginx logs
+sudo tail -f /var/log/nginx/error.log
 
-3. View bot logs:
-```bash
+# Bot logs
 screen -r arablife
-```
-
-4. View development server logs:
-```bash
-# Frontend logs
-cd dashboard/frontend
-npm run start
 
 # Backend logs
 cd dashboard/backend
-uvicorn app.main:app --reload
+source venv/bin/activate
+python3 -m uvicorn app.main:app --reload
+
+# Frontend logs
+cd dashboard/frontend
+npm start
 ```
 
-5. Common Issues:
-   - Invalid Token: Reset token in Discord Developer Portal
-   - Wrong IDs: Double-check all IDs in .env file
-   - Missing Permissions: Ensure bot role is above managed roles
-   - Connection Issues: Check server internet connection
-   - Port Issues: Make sure ports 80, 3000, and 8000 are not in use
-   - Nginx Issues: Check /var/log/nginx/error.log
+3. Common Issues:
+   - Port 80 in use: Check nginx configuration
+   - Missing dependencies: Run setup-server.sh again
+   - Virtual environment issues: Delete venv directory and rerun setup
+   - Permission issues: Check file ownership and permissions
 
-6. Still Having Issues:
-   - Check bot console for specific error messages
-   - Verify all IDs in .env file
-   - Ensure bot has required permissions
-   - Verify all dependencies installed correctly
-   - Check nginx configuration in /etc/nginx/sites-available/arablife
+4. Reset Setup:
+```bash
+# Stop all services
+./start.sh stop
+sudo systemctl stop nginx
+
+# Clean up
+rm -rf dashboard/backend/venv
+rm -rf dashboard/frontend/node_modules
+
+# Restart setup
+./copy-requirements.sh
+sudo ./setup-server.sh
+./dev.sh
+```
 
 ## Security Notes
 
@@ -225,5 +196,5 @@ uvicorn app.main:app --reload
 - Reset token if accidentally exposed
 - Regularly check bot permissions
 - Monitor audit logs for unusual activity
-- Keep the server updated with security patches
+- Keep the server updated
 - Use strong SSH keys for server access

@@ -125,17 +125,41 @@ apt-get install -y libcap2-bin || {
 }
 setcap 'cap_net_bind_service=+ep' $(which node)
 
+# Get the directory of the script
+DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
+
 # Create required directories
 echo -e "${YELLOW}Creating required directories...${NC}"
-mkdir -p dashboard/frontend/public
-mkdir -p dashboard/backend/venv
+mkdir -p "${DIR}/dashboard/frontend/public"
+mkdir -p "${DIR}/dashboard/backend"
+
+# Set up backend virtual environment
+echo -e "${YELLOW}Setting up Python virtual environment...${NC}"
+cd "${DIR}/dashboard/backend"
+python3 -m venv venv
+source venv/bin/activate
+pip install -r requirements.txt
+deactivate
+
+# Set up frontend
+echo -e "${YELLOW}Setting up frontend...${NC}"
+cd "${DIR}/dashboard/frontend"
+if [ ! -d "node_modules" ]; then
+    npm install
+fi
 
 # Set proper permissions
 echo -e "${YELLOW}Setting file permissions...${NC}"
-chown -R $SUDO_USER:$SUDO_USER . || {
+chown -R $SUDO_USER:$SUDO_USER "${DIR}" || {
     echo -e "${RED}Failed to set file permissions${NC}"
     exit 1
 }
+
+# Make scripts executable
+chmod +x "${DIR}/dev.sh"
+chmod +x "${DIR}/start.sh"
+chmod +x "${DIR}/install.sh"
+chmod +x "${DIR}/dashboard/frontend/setup-frontend.sh"
 
 echo -e "${GREEN}Server setup completed successfully!${NC}"
 echo -e "You can now run ${YELLOW}./dev.sh${NC} to start the development servers"
