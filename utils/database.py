@@ -1,293 +1,233 @@
 import aiosqlite
-import json
-from datetime import datetime
-from typing import Optional, Dict, Any
+import asyncio
 import logging
 import os
+from typing import Optional, Any, List, Dict
+from datetime import datetime
+from contextlib import asynccontextmanager
 
 logger = logging.getLogger('discord')
 
-class Database:
-    """Unified database handler for bot and dashboard"""
+class DatabasePool:
+    """A connection pool for SQLite database"""
     
-    def __init__(self, db_path: str = "data/dashboard.db"):
-        # Ensure data directory exists
-        os.makedirs(os.path.dirname(db_path), exist_ok=True)
+    def __init__(self, db_path: str, max_connections: int = 5):
         self.db_path = db_path
-        
-        # Create empty database file if it doesn't exist
-        if not os.path.exists(db_path):
-            open(db_path, 'a').close()
-            logger.info(f"Created new database file at {db_path}")
+        self.max_connections = max_connections
+        self._pool: List[aiosqlite.Connection] = []
+        self._semaphore = asyncio.Semaphore(max_connections)
+        self._lock = asyncio.Lock()
+
+    @asynccontextmanager
+    async def acquire(self):
+        """Acquire a database connection from the pool"""
+        async with self._semaphore:
+            # Try to get an existing connection
+            conn = None
+            async with self._lock:
+                if self._pool:
+                    conn = self._pool.pop()
+            
+            # Create new connection if needed
+            if conn is None:
+                conn = await aiosqlite.connect(self.db_path)
+                await conn.execute("PRAGMA foreign_keys = ON")
+            
+            try:
+                yield conn
+            finally:
+                # Return connection to pool
+                if len(self._pool) < self.max_connections:
+                    self._pool.append(conn)
+                else:
+                    await conn.close()
+
+    async def close_all(self):
+        """Close all connections in the pool"""
+        async with self._lock:
+            while self._pool:
+                conn = self._pool.pop()
+                await conn.close()
+
+class Database:
+    """Database manager class"""
+    
+    def __init__(self):
+        self.db_path = os.path.join(os.path.dirname(__file__), '..', 'data', 'bot.db')
+        os.makedirs(os.path.dirname(self.db_path), exist_ok=True)
+        self._pool: Optional[DatabasePool] = None
         
     async def init(self):
-        """Initialize database tables"""
-        try:
-            logger.info(f"Initializing database at {self.db_path}")
-            async with aiosqlite.connect(self.db_path) as db:
-                # Enable foreign keys
-                await db.execute("PRAGMA foreign_keys = ON")
+        """Initialize the database"""
+        self._pool = DatabasePool(self.db_path)
+        
+        async with self._pool.acquire() as conn:
+            # Enable foreign key support
+            await conn.execute("PRAGMA foreign_keys = ON")
+            
+            # Create tables
+            await conn.executescript("""
+                -- Guilds table
+                CREATE TABLE IF NOT EXISTS guilds (
+                    id TEXT PRIMARY KEY,
+                    name TEXT NOT NULL,
+                    owner_id TEXT NOT NULL,
+                    member_count INTEGER NOT NULL,
+                    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+                );
                 
-                # Create tables if they don't exist
-                await db.executescript("""
-                    -- Guilds table
-                    CREATE TABLE IF NOT EXISTS guilds (
-                        id TEXT PRIMARY KEY,
-                        name TEXT NOT NULL,
-                        icon_url TEXT,
-                        owner_id TEXT,
-                        member_count INTEGER,
-                        settings JSON DEFAULT '{}',
-                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-                    );
-
-                    -- Roles table
-                    CREATE TABLE IF NOT EXISTS roles (
-                        id TEXT PRIMARY KEY,
-                        guild_id TEXT NOT NULL,
-                        name TEXT NOT NULL,
-                        color INTEGER,
-                        position INTEGER,
-                        permissions TEXT,
-                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                        FOREIGN KEY (guild_id) REFERENCES guilds(id) ON DELETE CASCADE
-                    );
-
-                    -- Channels table
-                    CREATE TABLE IF NOT EXISTS channels (
-                        id TEXT PRIMARY KEY,
-                        guild_id TEXT NOT NULL,
-                        name TEXT NOT NULL,
-                        type TEXT NOT NULL,
-                        position INTEGER,
-                        settings JSON DEFAULT '{}',
-                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                        FOREIGN KEY (guild_id) REFERENCES guilds(id) ON DELETE CASCADE
-                    );
-
-                    -- Bot settings table
-                    CREATE TABLE IF NOT EXISTS bot_settings (
-                        id INTEGER PRIMARY KEY AUTOINCREMENT,
-                        guild_id TEXT UNIQUE NOT NULL,
-                        prefix TEXT DEFAULT '!',
-                        welcome_channel_id TEXT,
-                        welcome_message TEXT,
-                        role_channel_id TEXT,
-                        log_channel_id TEXT,
-                        ticket_category_id TEXT,
-                        automod_enabled BOOLEAN DEFAULT 0,
-                        leveling_enabled BOOLEAN DEFAULT 0,
-                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                        FOREIGN KEY (guild_id) REFERENCES guilds(id) ON DELETE CASCADE
-                    );
-
-                    -- AutoMod rules table
-                    CREATE TABLE IF NOT EXISTS automod_rules (
-                        id INTEGER PRIMARY KEY AUTOINCREMENT,
-                        guild_id TEXT NOT NULL,
-                        name TEXT NOT NULL,
-                        type TEXT NOT NULL,
-                        settings JSON DEFAULT '{}',
-                        enabled BOOLEAN DEFAULT 1,
-                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                        FOREIGN KEY (guild_id) REFERENCES guilds(id) ON DELETE CASCADE
-                    );
-
-                    -- Leveling settings table
-                    CREATE TABLE IF NOT EXISTS leveling_settings (
-                        id INTEGER PRIMARY KEY AUTOINCREMENT,
-                        guild_id TEXT UNIQUE NOT NULL,
-                        xp_per_message INTEGER DEFAULT 1,
-                        xp_cooldown INTEGER DEFAULT 60,
-                        level_up_channel_id TEXT,
-                        level_up_message TEXT,
-                        role_rewards JSON DEFAULT '{}',
-                        channel_multipliers JSON DEFAULT '{}',
-                        role_multipliers JSON DEFAULT '{}',
-                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                        FOREIGN KEY (guild_id) REFERENCES guilds(id) ON DELETE CASCADE
-                    );
-
-                    -- User levels table
-                    CREATE TABLE IF NOT EXISTS user_levels (
-                        id INTEGER PRIMARY KEY AUTOINCREMENT,
-                        guild_id TEXT NOT NULL,
-                        user_id TEXT NOT NULL,
-                        xp INTEGER DEFAULT 0,
-                        level INTEGER DEFAULT 0,
-                        last_message_time TIMESTAMP,
-                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                        UNIQUE(guild_id, user_id),
-                        FOREIGN KEY (guild_id) REFERENCES guilds(id) ON DELETE CASCADE
-                    );
-
-                    -- Custom commands table
-                    CREATE TABLE IF NOT EXISTS custom_commands (
-                        id INTEGER PRIMARY KEY AUTOINCREMENT,
-                        guild_id TEXT NOT NULL,
-                        name TEXT NOT NULL,
-                        response TEXT NOT NULL,
-                        created_by TEXT NOT NULL,
-                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                        UNIQUE(guild_id, name),
-                        FOREIGN KEY (guild_id) REFERENCES guilds(id) ON DELETE CASCADE
-                    );
-
-                    -- AutoMod settings table
-                    CREATE TABLE IF NOT EXISTS automod_settings (
-                        id INTEGER PRIMARY KEY AUTOINCREMENT,
-                        guild_id TEXT UNIQUE NOT NULL,
-                        settings JSON DEFAULT '{}',
-                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                        FOREIGN KEY (guild_id) REFERENCES guilds(id) ON DELETE CASCADE
-                    );
-
-                    -- AutoMod logs table
-                    CREATE TABLE IF NOT EXISTS automod_logs (
-                        id INTEGER PRIMARY KEY AUTOINCREMENT,
-                        guild_id TEXT NOT NULL,
-                        user_id TEXT NOT NULL,
-                        action TEXT NOT NULL,
-                        reason TEXT,
-                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                        FOREIGN KEY (guild_id) REFERENCES guilds(id) ON DELETE CASCADE
-                    );
-
-                    -- Message similarity cache table
-                    CREATE TABLE IF NOT EXISTS message_similarity_cache (
-                        id INTEGER PRIMARY KEY AUTOINCREMENT,
-                        guild_id TEXT NOT NULL,
-                        user_id TEXT NOT NULL,
-                        message_hash TEXT NOT NULL,
-                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                        FOREIGN KEY (guild_id) REFERENCES guilds(id) ON DELETE CASCADE
-                    );
-                """)
-                await db.commit()
-        except Exception as e:
-            logger.error(f"Failed to initialize database: {str(e)}")
-            raise
-
-    async def get_guild_settings(self, guild_id: str) -> Optional[Dict[str, Any]]:
-        """Get all settings for a guild"""
-        async with aiosqlite.connect(self.db_path) as db:
-            db.row_factory = aiosqlite.Row
-            
-            # Get bot settings
-            async with db.execute(
-                "SELECT * FROM bot_settings WHERE guild_id = ?",
-                (guild_id,)
-            ) as cursor:
-                bot_settings = await cursor.fetchone()
-            
-            # Get leveling settings
-            async with db.execute(
-                "SELECT * FROM leveling_settings WHERE guild_id = ?",
-                (guild_id,)
-            ) as cursor:
-                leveling_settings = await cursor.fetchone()
-            
-            # Get automod rules
-            async with db.execute(
-                "SELECT * FROM automod_rules WHERE guild_id = ?",
-                (guild_id,)
-            ) as cursor:
-                automod_rules = await cursor.fetchall()
-            
-            if not bot_settings:
-                return None
+                -- Bot settings table
+                CREATE TABLE IF NOT EXISTS bot_settings (
+                    guild_id TEXT PRIMARY KEY,
+                    prefix TEXT DEFAULT '!',
+                    welcome_channel_id TEXT,
+                    audit_log_channel_id TEXT,
+                    role_log_channel_id TEXT,
+                    FOREIGN KEY(guild_id) REFERENCES guilds(id) ON DELETE CASCADE
+                );
                 
-            return {
-                "bot": dict(bot_settings),
-                "leveling": dict(leveling_settings) if leveling_settings else {},
-                "automod_rules": [dict(rule) for rule in automod_rules]
-            }
+                -- User levels table
+                CREATE TABLE IF NOT EXISTS user_levels (
+                    guild_id TEXT,
+                    user_id TEXT,
+                    xp INTEGER DEFAULT 0,
+                    level INTEGER DEFAULT 0,
+                    last_message_time DATETIME,
+                    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                    PRIMARY KEY (guild_id, user_id),
+                    FOREIGN KEY(guild_id) REFERENCES guilds(id) ON DELETE CASCADE
+                );
+                
+                -- Leveling settings table
+                CREATE TABLE IF NOT EXISTS leveling_settings (
+                    guild_id TEXT PRIMARY KEY,
+                    xp_per_message INTEGER DEFAULT 15,
+                    xp_cooldown INTEGER DEFAULT 60,
+                    level_up_channel_id TEXT,
+                    level_up_message TEXT,
+                    role_rewards TEXT DEFAULT '{}',
+                    channel_multipliers TEXT DEFAULT '{}',
+                    role_multipliers TEXT DEFAULT '{}',
+                    leveling_enabled BOOLEAN DEFAULT 1,
+                    FOREIGN KEY(guild_id) REFERENCES guilds(id) ON DELETE CASCADE
+                );
+                
+                -- AutoMod settings table
+                CREATE TABLE IF NOT EXISTS automod_settings (
+                    guild_id TEXT PRIMARY KEY,
+                    settings TEXT NOT NULL,
+                    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                    FOREIGN KEY(guild_id) REFERENCES guilds(id) ON DELETE CASCADE
+                );
+                
+                -- AutoMod logs table
+                CREATE TABLE IF NOT EXISTS automod_logs (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    guild_id TEXT NOT NULL,
+                    user_id TEXT NOT NULL,
+                    action TEXT NOT NULL,
+                    reason TEXT,
+                    timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
+                    FOREIGN KEY(guild_id) REFERENCES guilds(id) ON DELETE CASCADE
+                );
+                
+                -- Custom commands table
+                CREATE TABLE IF NOT EXISTS custom_commands (
+                    guild_id TEXT,
+                    name TEXT,
+                    response TEXT NOT NULL,
+                    created_by TEXT NOT NULL,
+                    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                    PRIMARY KEY (guild_id, name),
+                    FOREIGN KEY(guild_id) REFERENCES guilds(id) ON DELETE CASCADE
+                );
+                
+                -- Tickets table
+                CREATE TABLE IF NOT EXISTS tickets (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    guild_id TEXT NOT NULL,
+                    channel_id TEXT NOT NULL,
+                    user_id TEXT NOT NULL,
+                    status TEXT DEFAULT 'open',
+                    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                    closed_at DATETIME,
+                    FOREIGN KEY(guild_id) REFERENCES guilds(id) ON DELETE CASCADE
+                );
+                
+                -- Ticket messages table
+                CREATE TABLE IF NOT EXISTS ticket_messages (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    ticket_id INTEGER NOT NULL,
+                    user_id TEXT NOT NULL,
+                    content TEXT NOT NULL,
+                    timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
+                    FOREIGN KEY(ticket_id) REFERENCES tickets(id) ON DELETE CASCADE
+                );
+            """)
+            await conn.commit()
 
-    async def update_guild_settings(self, guild_id: str, settings: Dict[str, Any]):
-        """Update guild settings"""
-        async with aiosqlite.connect(self.db_path) as db:
-            if "bot" in settings:
-                bot_settings = settings["bot"]
-                placeholders = ", ".join(f"{k} = ?" for k in bot_settings.keys())
-                values = list(bot_settings.values())
-                await db.execute(
-                    f"UPDATE bot_settings SET {placeholders} WHERE guild_id = ?",
-                    (*values, guild_id)
-                )
+    @asynccontextmanager
+    async def transaction(self):
+        """Context manager for database transactions"""
+        if not self._pool:
+            raise RuntimeError("Database not initialized")
             
-            if "leveling" in settings:
-                leveling_settings = settings["leveling"]
-                placeholders = ", ".join(f"{k} = ?" for k in leveling_settings.keys())
-                values = list(leveling_settings.values())
-                await db.execute(
-                    f"UPDATE leveling_settings SET {placeholders} WHERE guild_id = ?",
-                    (*values, guild_id)
-                )
-            
-            await db.commit()
+        async with self._pool.acquire() as conn:
+            async with conn.cursor() as cursor:
+                await conn.execute("BEGIN")
+                try:
+                    yield cursor
+                    await conn.commit()
+                except Exception:
+                    await conn.rollback()
+                    raise
 
     async def add_xp(self, guild_id: str, user_id: str, xp_amount: int) -> Optional[int]:
         """Add XP to user and return new level if leveled up"""
-        async with aiosqlite.connect(self.db_path) as db:
-            try:
-                # Get current XP and level
-                async with db.execute(
-                    "SELECT xp, level FROM user_levels WHERE guild_id = ? AND user_id = ?",
-                    (guild_id, user_id)
-                ) as cursor:
-                    result = await cursor.fetchone()
-                
-                if result:
-                    current_xp, current_level = result
-                else:
-                    current_xp, current_level = 0, 0
-                    await db.execute(
-                        "INSERT INTO user_levels (guild_id, user_id, xp, level) VALUES (?, ?, 0, 0)",
-                        (guild_id, user_id)
-                    )
-                
-                # Calculate new XP and level
+        async with self.transaction() as cursor:
+            # Get current XP and level
+            await cursor.execute("""
+                SELECT xp, level FROM user_levels
+                WHERE guild_id = ? AND user_id = ?
+            """, (guild_id, user_id))
+            result = await cursor.fetchone()
+            
+            if result:
+                current_xp, current_level = result
                 new_xp = current_xp + xp_amount
-                new_level = self.calculate_level(new_xp)
+            else:
+                current_level = 0
+                new_xp = xp_amount
                 
-                # Update database
-                await db.execute(
-                    """UPDATE user_levels 
-                    SET xp = ?, level = ?, last_message_time = CURRENT_TIMESTAMP
-                    WHERE guild_id = ? AND user_id = ?""",
-                    (new_xp, new_level, guild_id, user_id)
-                )
-                
-                await db.commit()
-                return new_level if new_level > current_level else None
-                
-            except Exception as e:
-                logger.error(f"Failed to add XP: {str(e)}")
-                return None
+            # Calculate new level
+            new_level = self.calculate_level(new_xp)
+            
+            # Update database
+            await cursor.execute("""
+                INSERT OR REPLACE INTO user_levels (guild_id, user_id, xp, level, last_message_time)
+                VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)
+            """, (guild_id, user_id, new_xp, new_level))
+            
+            # Return new level if leveled up
+            if new_level > current_level:
+                return new_level
+            return None
 
     @staticmethod
     def calculate_level(xp: int) -> int:
-        """Calculate level based on total XP"""
-        level = 0
-        xp_for_level = 0
-        
-        while True:
-            xp_needed = 5 * (level ** 2) + 50 * level + 100
-            if xp_for_level + xp_needed > xp:
-                break
-            xp_for_level += xp_needed
-            level += 1
-            
-        return level
+        """Calculate level from XP amount"""
+        # Simple level calculation: level = xp/100
+        return xp // 100
 
-# Create global database instance
+    async def close(self):
+        """Close all database connections"""
+        if self._pool:
+            await self._pool.close_all()
+            self._pool = None
+
+# Global database instance
 db = Database()

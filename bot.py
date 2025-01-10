@@ -5,6 +5,10 @@ import logging
 import os
 import asyncio
 import aiosqlite
+import sys
+import traceback
+from datetime import datetime
+from typing import Optional, Dict, List
 from config import Config
 from utils.logger import setup_logging
 from utils.database import db
@@ -12,22 +16,37 @@ from utils.database import db
 # Ensure database directory exists
 os.makedirs(os.path.dirname(db.db_path), exist_ok=True)
 
-# Set up intents
-intents = discord.Intents.default()
-intents.members = True  # Required for role management
-intents.message_content = True  # Required for commands
-intents.voice_states = True  # Required for voice functionality
+# Set up intents with all privileges
+intents = discord.Intents.all()
 
 class ArabLifeBot(commands.Bot):
     """Custom bot class with additional functionality"""
     
     def __init__(self):
-        # Get prefix from database or use default
         super().__init__(
             command_prefix=self.get_prefix,
             intents=intents,
-            case_insensitive=True  # Make commands case-insensitive
+            case_insensitive=True,
+            strip_after_prefix=True,
+            allowed_mentions=discord.AllowedMentions(
+                users=True,
+                roles=False,
+                everyone=False,
+                replied_user=True
+            )
         )
+        
+        # Initialize bot state
+        self.uptime = None
+        self.prefixes = {}
+        self.cog_load_order = []
+        self.cog_dependencies = {
+            'cogs.leveling_commands': ['utils.database'],
+            'cogs.automod_commands': ['utils.database'],
+            'cogs.ticket_commands': ['utils.database'],
+            'cogs.custom_commands': ['utils.database']
+        }
+        
         # List of cogs to load
         self.initial_extensions = [
             'cogs.role_commands',
@@ -39,11 +58,11 @@ class ArabLifeBot(commands.Bot):
             'cogs.security_commands',
             'cogs.leveling_commands',
             'cogs.automod_commands',
-            'cogs.custom_commands'  # New cog for custom commands
+            'cogs.custom_commands'
         ]
         
-        # Store guild prefixes in memory for faster access
-        self.prefixes = {}
+        # Set up error handlers
+        self.tree.on_error = self.on_app_command_error
         
     async def get_prefix(self, message: discord.Message) -> str:
         """Get the prefix for the guild"""
@@ -68,26 +87,37 @@ class ArabLifeBot(commands.Bot):
         self.prefixes[message.guild.id] = prefix
         return prefix
 
+    async def load_extension_with_dependencies(self, extension: str) -> None:
+        """Load an extension after its dependencies"""
+        if extension in self.cog_load_order:
+            return
+            
+        # Load dependencies first
+        if extension in self.cog_dependencies:
+            for dependency in self.cog_dependencies[extension]:
+                await self.load_extension_with_dependencies(dependency)
+                
+        try:
+            await self.load_extension(extension)
+            self.cog_load_order.append(extension)
+            print(f'Loaded extension: {extension}')
+        except Exception as e:
+            print(f'Failed to load extension {extension}: {str(e)}')
+            traceback.print_exc()
+
     async def setup_hook(self):
         """Initialize bot setup"""
         # Initialize database
         await db.init()
         
-        # Load extensions
+        # Load extensions in dependency order
         for extension in self.initial_extensions:
-            try:
-                await self.load_extension(extension)
-                print(f'Loaded extension: {extension}')
-            except Exception as e:
-                print(f'Failed to load extension {extension}: {str(e)}')
+            await self.load_extension_with_dependencies(extension)
 
         # Register persistent views for tickets
         from cogs.ticket_commands import TicketView, StaffView
         self.add_view(TicketView())
         self.add_view(StaffView())
-
-        # Set up command syncing
-        self.tree.on_error = self.on_app_command_error
         
         # Sync commands with guild
         if Config.GUILD_ID:
@@ -98,9 +128,13 @@ class ArabLifeBot(commands.Bot):
 
     async def on_ready(self):
         """Event triggered when the bot is ready"""
+        if not self.uptime:
+            self.uptime = datetime.utcnow()
+            
         print(f'Logged in as {self.user.name}')
         print(f'Bot ID: {self.user.id}')
         print(f'Discord.py Version: {discord.__version__}')
+        print(f'Uptime: {self.uptime}')
         print('------')
 
         # Setup logging
@@ -150,6 +184,24 @@ class ArabLifeBot(commands.Bot):
             await self.tree.sync(guild=guild_obj)
             print(f"Synced commands to new guild: {guild.name}")
 
+    async def on_error(self, event_method: str, *args, **kwargs):
+        """Global error handler for events"""
+        exc_info = sys.exc_info()
+        traceback.print_exception(*exc_info)
+        
+        # Log to error channel if configured
+        if hasattr(Config, 'ERROR_LOG_CHANNEL_ID'):
+            channel = self.get_channel(Config.ERROR_LOG_CHANNEL_ID)
+            if channel:
+                error_msg = f"```py\nEvent: {event_method}\n"
+                error_msg += "".join(traceback.format_exception(*exc_info))
+                error_msg += "```"
+                
+                try:
+                    await channel.send(error_msg[:2000])  # Discord message limit
+                except:
+                    pass
+
     async def on_command_error(self, ctx, error):
         """Global error handler for command errors"""
         if isinstance(error, commands.MissingPermissions):
@@ -159,7 +211,6 @@ class ArabLifeBot(commands.Bot):
         elif isinstance(error, commands.BadArgument):
             await ctx.send('*معطيات غير صالحة.*')
         elif isinstance(error, app_commands.CommandInvokeError):
-            # Handle app command errors
             await ctx.send('*حدث خطأ أثناء تنفيذ الأمر. يرجى المحاولة مرة أخرى.*')
             logging.error(f"App command error: {error}", exc_info=True)
         elif isinstance(error, commands.CommandNotFound):
@@ -175,7 +226,6 @@ class ArabLifeBot(commands.Bot):
                             await ctx.send(result[0])
                             return
         else:
-            # Log unexpected errors
             logging.error(f"An unexpected error occurred: {error}", exc_info=True)
             await ctx.send('*حدث خطأ غير متوقع. ارجو التواصل مع إدارة الديسكورد وتقديم تفاصيل الأمر.*')
 
@@ -192,12 +242,21 @@ class ArabLifeBot(commands.Bot):
                 ephemeral=True
             )
         else:
-            # Log unexpected errors
             logging.error(f"App command error: {error}", exc_info=True)
             await interaction.response.send_message(
                 "*حدث خطأ غير متوقع. يرجى المحاولة مرة أخرى.*",
                 ephemeral=True
             )
+
+    async def close(self):
+        """Cleanup when bot is shutting down"""
+        print("Bot is shutting down...")
+        
+        # Close database connections
+        await db.close()
+        
+        # Call parent close
+        await super().close()
 
 async def main():
     """Main function to run the bot"""
@@ -218,7 +277,14 @@ async def main():
             await bot.start(Config.TOKEN)
     except Exception as e:
         print(f"Failed to start bot: {str(e)}")
+        traceback.print_exc()
 
 # Run the bot
 if __name__ == "__main__":
-    asyncio.run(main())
+    try:
+        asyncio.run(main())
+    except KeyboardInterrupt:
+        print("Bot stopped by user")
+    except Exception as e:
+        print(f"Fatal error: {str(e)}")
+        traceback.print_exc()
