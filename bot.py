@@ -3,9 +3,13 @@ from discord.ext import commands
 import logging
 import os
 import asyncio
+import aiosqlite
 from config import Config
 from utils.logger import setup_logging
 from utils.database import db
+
+# Ensure database directory exists
+os.makedirs(os.path.dirname(db.db_path), exist_ok=True)
 
 # Set up intents
 intents = discord.Intents.default()

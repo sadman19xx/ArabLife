@@ -82,8 +82,16 @@ class Config:
     @classmethod
     def validate_config(cls):
         """Validate required configuration values"""
+        # Validate token first
+        if not cls.TOKEN:
+            raise ValueError("Discord bot token not set in .env file")
+        
+        # Basic token format validation (should be ~70 chars with 2 dots)
+        if not cls.TOKEN.count('.') == 2 or len(cls.TOKEN) < 50:
+            raise ValueError("Invalid Discord bot token format. Token should contain exactly two dots and be at least 50 characters long.")
+
+        # Check other required fields
         required_fields = [
-            ('TOKEN', cls.TOKEN),
             ('GUILD_ID', cls.GUILD_ID),
             ('ROLE_ID_TO_GIVE', cls.ROLE_ID_TO_GIVE),
             ('ROLE_ID_REMOVE_ALLOWED', cls.ROLE_ID_REMOVE_ALLOWED),
@@ -93,16 +101,23 @@ class Config:
         ]
         
         missing_fields = [field for field, value in required_fields if not value]
-        
         if missing_fields:
             raise ValueError(f"Missing required configuration: {', '.join(missing_fields)}")
             
-        if not cls.ROLE_IDS_ALLOWED:
+        # Validate role IDs
+        if not cls.ROLE_IDS_ALLOWED or cls.ROLE_IDS_ALLOWED == ['']:
             raise ValueError("At least one allowed role ID must be configured")
 
-        # Validate FFmpeg if path is provided
-        if cls.FFMPEG_PATH and not os.path.isfile(cls.FFMPEG_PATH):
-            raise ValueError(f"FFmpeg not found at specified path: {cls.FFMPEG_PATH}")
+        # Validate FFmpeg path for Unix systems
+        default_ffmpeg = '/usr/bin/ffmpeg'
+        if not cls.FFMPEG_PATH:
+            cls.FFMPEG_PATH = default_ffmpeg
+        
+        # Convert Windows path to Unix if needed
+        cls.FFMPEG_PATH = cls.FFMPEG_PATH.replace('\\', '/').replace('C:', '')
+        
+        if not os.path.isfile(cls.FFMPEG_PATH):
+            raise ValueError(f"FFmpeg not found at path: {cls.FFMPEG_PATH}. Please install FFmpeg with: sudo apt install -y ffmpeg")
 
         # Validate ticket settings if staff role is set
         if cls.TICKET_STAFF_ROLE_ID != 0:
