@@ -68,16 +68,25 @@ cd "${DIR}"
 echo -e "${YELLOW}Setting up frontend...${NC}"
 cd "${DIR}/dashboard/frontend"
 
-# Create frontend .env file
-echo -e "${YELLOW}Creating frontend environment configuration...${NC}"
-cat > .env << EOL
+# Copy development environment file if it doesn't exist
+if [ ! -f ".env.development" ]; then
+    echo -e "${YELLOW}Creating development environment configuration...${NC}"
+    cat > .env.development << EOL
+PORT=3000
+HOST=${SERVER_IP}
 REACT_APP_API_URL=http://${SERVER_IP}:8000
+WDS_SOCKET_HOST=${SERVER_IP}
+WDS_SOCKET_PORT=3000
 EOL
+fi
 
 # Install frontend dependencies if node_modules doesn't exist
 if [ ! -d "node_modules" ]; then
     echo -e "${YELLOW}Installing frontend dependencies...${NC}"
-    npm install
+    npm install || {
+        echo -e "${RED}Failed to install frontend dependencies${NC}"
+        exit 1
+    }
 fi
 
 # Create public directory if it doesn't exist
@@ -94,11 +103,25 @@ python3 -m uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload &
 # Start frontend server
 echo -e "${YELLOW}Starting frontend server...${NC}"
 cd "${DIR}/dashboard/frontend"
-PORT=80 HOST=${SERVER_IP} npm start &
+BROWSER=none NODE_ENV=development npm start &
+
+# Wait a moment to check if servers started successfully
+sleep 5
+
+# Check if servers are running
+if ! pgrep -f "uvicorn" > /dev/null; then
+    echo -e "${RED}Backend server failed to start${NC}"
+    cleanup
+fi
+
+if ! pgrep -f "react-scripts start" > /dev/null; then
+    echo -e "${RED}Frontend server failed to start${NC}"
+    cleanup
+fi
 
 echo -e "${GREEN}Development servers are running!${NC}"
 echo -e "Backend: ${GREEN}http://${SERVER_IP}:8000${NC}"
-echo -e "Frontend: ${GREEN}http://${SERVER_IP}${NC}"
+echo -e "Frontend: ${GREEN}http://${SERVER_IP}${NC} (proxied through nginx)"
 echo -e "\nPress ${YELLOW}Ctrl+C${NC} to stop both servers\n"
 
 # Wait for both servers

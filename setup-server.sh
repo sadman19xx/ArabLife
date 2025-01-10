@@ -59,6 +59,7 @@ server {
     listen 80;
     server_name 45.76.83.149;
 
+    # Frontend proxy
     location / {
         proxy_pass http://localhost:3000;
         proxy_http_version 1.1;
@@ -68,8 +69,14 @@ server {
         proxy_cache_bypass \$http_upgrade;
         proxy_set_header X-Real-IP \$remote_addr;
         proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+        
+        # Additional WebSocket support
+        proxy_set_header Sec-WebSocket-Extensions \$http_sec_websocket_extensions;
+        proxy_set_header Sec-WebSocket-Key \$http_sec_websocket_key;
+        proxy_set_header Sec-WebSocket-Version \$http_sec_websocket_version;
     }
 
+    # Backend API proxy
     location /api {
         proxy_pass http://localhost:8000;
         proxy_http_version 1.1;
@@ -81,6 +88,7 @@ server {
         proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
     }
 
+    # API Documentation
     location /docs {
         proxy_pass http://localhost:8000/docs;
         proxy_http_version 1.1;
@@ -95,6 +103,26 @@ server {
         proxy_http_version 1.1;
         proxy_set_header Upgrade \$http_upgrade;
         proxy_set_header Connection 'upgrade';
+        proxy_set_header Host \$host;
+        proxy_cache_bypass \$http_upgrade;
+    }
+
+    # WebSocket support for development server
+    location /ws {
+        proxy_pass http://localhost:3000;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade \$http_upgrade;
+        proxy_set_header Connection "upgrade";
+        proxy_set_header Host \$host;
+        proxy_cache_bypass \$http_upgrade;
+    }
+
+    # Sockjs support for development server
+    location /sockjs-node {
+        proxy_pass http://localhost:3000;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade \$http_upgrade;
+        proxy_set_header Connection "upgrade";
         proxy_set_header Host \$host;
         proxy_cache_bypass \$http_upgrade;
     }
@@ -116,14 +144,6 @@ systemctl restart nginx || {
     echo -e "${RED}Failed to restart nginx${NC}"
     exit 1
 }
-
-# Set permissions for running on port 80
-echo -e "${YELLOW}Setting up port permissions...${NC}"
-apt-get install -y libcap2-bin || {
-    echo -e "${RED}Failed to install libcap2-bin${NC}"
-    exit 1
-}
-setcap 'cap_net_bind_service=+ep' $(which node)
 
 # Get the directory of the script
 DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
