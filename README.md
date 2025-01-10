@@ -88,17 +88,67 @@ cp .env.example .env
 nano .env
 ```
 
+### Getting Your Bot Token
+
+Before configuring the bot, you need to create a Discord application and get your bot token:
+
+1. Go to [Discord Developer Portal](https://discord.com/developers/applications)
+2. Click "New Application" and give it a name
+3. Go to the "Bot" section in the left sidebar
+4. Click "Add Bot" or "Reset Token"
+5. Click "Copy" to copy your bot token
+   - ⚠️ Keep this token secret! Never share it or commit it to git
+   - The token should look like: `MTIzNDU2Nzg5MDEyMzQ1Njc4.ABCDEF.ghijklmnopqrstuvwxyz123456`
+
+### Bot Permissions Setup
+
+1. Go to the "OAuth2" section in the left sidebar
+2. In "Scopes", select "bot" and "applications.commands"
+3. In "Bot Permissions", select:
+   - Manage Roles
+   - Manage Channels
+   - Kick Members
+   - Ban Members
+   - Manage Messages
+   - Embed Links
+   - Attach Files
+   - Read Message History
+   - Add Reactions
+   - Connect
+   - Speak
+4. Copy the generated URL and open it in a browser to add the bot to your server
+
+### Configure Environment
+
 Configure your `.env` file with:
 ```env
-TOKEN=your_bot_token
-GUILD_ID=your_guild_id
-ROLE_IDS_ALLOWED=role1,role2
+# Required: Your bot token from Discord Developer Portal
+TOKEN=MTIzNDU2Nzg5MDEyMzQ1Njc4.ABCDEF.ghijklmnopqrstuvwxyz123456
+
+# Required: Your Discord server (guild) ID
+GUILD_ID=123456789  # Right-click server name -> Copy ID
+
+# Required: Role IDs (Enable Developer Mode to get these)
+ROLE_IDS_ALLOWED=123456789,987654321  # Admin/mod role IDs
+ROLE_ID_TO_GIVE=123456789  # Auto-assign role ID
+ROLE_ID_REMOVE_ALLOWED=123456789  # Role that can remove others
+```
+
+⚠️ **Important**: All role and channel IDs must be actual Discord IDs (numbers), not placeholder text. To get IDs:
+1. Enable Developer Mode in Discord (User Settings > App Settings > Advanced > Developer Mode)
+2. Right-click on a role/channel and select "Copy ID"
+3. Replace the example IDs in .env with your actual Discord IDs
+
+Example of correct values:
+```env
+ROLE_ID_TO_GIVE=123456789
+PLAYER_REPORT_ROLE_ID=987654321
+```
+
+Example of incorrect values that will cause errors:
+```env
 ROLE_ID_TO_GIVE=role_id
-ROLE_ID_REMOVE_ALLOWED=role_id
-ROLE_ACTIVITY_LOG_CHANNEL_ID=channel_id
-AUDIT_LOG_CHANNEL_ID=channel_id
-WELCOME_CHANNEL_ID=channel_id
-WELCOME_BACKGROUND_URL=url_to_background
+PLAYER_REPORT_ROLE_ID=role_id
 ```
 
 ### 3. Dashboard Installation
@@ -233,10 +283,26 @@ npm start
 
 ### Common Issues
 
-1. Bot won't start:
-   - Check logs: `sudo journalctl -u arablife-bot -f`
-   - Verify .env configuration
+1. "Improper token has been passed" error:
+   - Your bot token is invalid or malformed
+   - Get a new token from Discord Developer Portal -> Bot section
+   - Token should be ~70 characters long with letters, numbers, and dots
+   - Never use placeholder text like "your_bot_token"
+
+2. "Invalid literal for int()" error:
+   - You have placeholder text instead of actual Discord IDs
+   - All role and channel IDs must be numbers (e.g., 123456789)
+   - Enable Developer Mode in Discord to get IDs:
+     1. User Settings -> App Settings -> Advanced
+     2. Turn on Developer Mode
+     3. Right-click roles/channels -> Copy ID
+
+3. Other startup issues:
+   - Run `python3 validate_env.py` to check your configuration
+   - Verify .env matches the format in .env.example
    - Check Python virtual environment
+   - Ensure all required packages are installed
+   - Check logs: `sudo journalctl -u arablife-bot -f`
 
 2. Dashboard API issues:
    - Check logs: `sudo journalctl -u arablife-dashboard-api -f`

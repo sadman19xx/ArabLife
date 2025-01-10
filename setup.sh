@@ -21,6 +21,31 @@ source venv/bin/activate
 echo "Installing Python packages..."
 pip install -r requirements.txt
 
+# Make validation script executable
+chmod +x validate_env.py
+
+# Create .env if it doesn't exist
+if [ ! -f .env ]; then
+    echo "Creating .env file from example..."
+    cp .env.example .env
+    echo "Please edit .env file with your Discord bot settings"
+    echo "Use Discord Developer Mode to get the correct role and channel IDs"
+    exit 1
+fi
+
+# Validate environment variables
+echo "Validating environment variables..."
+python3 validate_env.py
+if [ $? -ne 0 ]; then
+    echo "❌ Environment validation failed"
+    echo "Please fix the errors in your .env file and run setup.sh again"
+    echo "Make sure all role and channel IDs are actual Discord IDs (numbers)"
+    echo "Enable Developer Mode in Discord to get IDs (User Settings > App Settings > Advanced)"
+    exit 1
+fi
+
+echo "✅ Environment validation successful"
+
 # Create necessary directories
 echo "Creating necessary directories..."
 mkdir -p logs
