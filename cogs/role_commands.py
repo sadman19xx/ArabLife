@@ -1,5 +1,6 @@
 import discord
 from discord.ext import commands
+from discord import app_commands
 from discord.ext.commands import Cog, cooldown, BucketType
 import logging
 from config import Config
@@ -14,9 +15,10 @@ class RoleCommands(Cog):
         self._role_cache = {}
         self.visa_image_url = "https://i.imgur.com/XYZ123.png"  # Replace with your actual image URL
 
-    def _check_role_hierarchy(self, ctx, member):
+    def _check_role_hierarchy(self, interaction_or_ctx, member):
         """Check if the bot's role is high enough to manage the target member's roles"""
-        bot_member = ctx.guild.get_member(self.bot.user.id)
+        guild = interaction_or_ctx.guild if isinstance(interaction_or_ctx, discord.Interaction) else interaction_or_ctx.guild
+        bot_member = guild.get_member(self.bot.user.id)
         return bot_member.top_role > member.top_role
 
     def _get_role(self, guild_id):
@@ -65,23 +67,26 @@ class RoleCommands(Cog):
         except discord.Forbidden:
             return False
 
-    @commands.command(name='مقبول')
-    @has_allowed_role()
-    @cooldown(1, Config.ROLE_COMMAND_COOLDOWN, BucketType.user)
-    async def give_role(self, ctx, member: discord.Member):
+    @app_commands.command(
+        name='مقبول',
+        description='Give visa role to a member'
+    )
+    @app_commands.checks.has_permissions(manage_roles=True)
+    @app_commands.checks.cooldown(1, Config.ROLE_COMMAND_COOLDOWN)
+    async def give_role(self, interaction: discord.Interaction, member: discord.Member):
         """Give the specified role to a member"""
         # Security checks
-        if not self._check_role_hierarchy(ctx, member):
-            await ctx.send('*لا يمكن تعديل أدوار هذا العضو.*')
+        if not self._check_role_hierarchy(interaction, member):
+            await interaction.response.send_message('*لا يمكن تعديل أدوار هذا العضو.*', ephemeral=True)
             return
 
-        role = self._get_role(ctx.guild.id)
+        role = self._get_role(interaction.guild_id)
         if not role:
-            await ctx.send('*لا توجد تاشيرات.*')
+            await interaction.response.send_message('*لا توجد تاشيرات.*', ephemeral=True)
             return
 
         if role in member.roles:
-            await ctx.send(f'*تم أصدار التاشيرة من قبل.*')
+            await interaction.response.send_message(f'*تم أصدار التاشيرة من قبل.*', ephemeral=True)
             return
 
         try:
@@ -92,32 +97,35 @@ class RoleCommands(Cog):
             if not dm_sent:
                 response += '\n*لم نتمكن من ارسال رسالة خاصة للعضو.*'
             
-            await ctx.send(response)
-            logger.info(f"Role '{role.name}' assigned to {member.name}#{member.discriminator} by {ctx.author.name}#{ctx.author.discriminator}")
+            await interaction.response.send_message(response)
+            logger.info(f"Role '{role.name}' assigned to {member.name}#{member.discriminator} by {interaction.user.name}#{interaction.user.discriminator}")
         except discord.Forbidden:
-            await ctx.send('*لا املك الصلاحية لتعديل الأدوار.*')
+            await interaction.response.send_message('*لا املك الصلاحية لتعديل الأدوار.*', ephemeral=True)
             logger.error(f"Failed to assign role: Insufficient permissions")
         except discord.HTTPException as e:
-            await ctx.send('*حدث خطأ اثناء تعديل الأدوار.*')
+            await interaction.response.send_message('*حدث خطأ اثناء تعديل الأدوار.*', ephemeral=True)
             logger.error(f"Failed to assign role: {str(e)}")
 
-    @commands.command(name='مرفوض')
-    @has_remove_role()
-    @cooldown(1, Config.ROLE_COMMAND_COOLDOWN, BucketType.user)
-    async def remove_role(self, ctx, member: discord.Member):
+    @app_commands.command(
+        name='مرفوض',
+        description='Remove visa role from a member'
+    )
+    @app_commands.checks.has_permissions(manage_roles=True)
+    @app_commands.checks.cooldown(1, Config.ROLE_COMMAND_COOLDOWN)
+    async def remove_role(self, interaction: discord.Interaction, member: discord.Member):
         """Remove the specified role from a member"""
         # Security checks
-        if not self._check_role_hierarchy(ctx, member):
-            await ctx.send('*لا يمكن تعديل أدوار هذا العضو.*')
+        if not self._check_role_hierarchy(interaction, member):
+            await interaction.response.send_message('*لا يمكن تعديل أدوار هذا العضو.*', ephemeral=True)
             return
 
-        role = self._get_role(ctx.guild.id)
+        role = self._get_role(interaction.guild_id)
         if not role:
-            await ctx.send('*لا توجد تاشيرات.*')
+            await interaction.response.send_message('*لا توجد تاشيرات.*', ephemeral=True)
             return
 
         if role not in member.roles:
-            await ctx.send(f'*لا يوجد لديه تاشيرة من قبل.*')
+            await interaction.response.send_message(f'*لا يوجد لديه تاشيرة من قبل.*', ephemeral=True)
             return
 
         try:
@@ -128,13 +136,13 @@ class RoleCommands(Cog):
             if not dm_sent:
                 response += '\n*لم نتمكن من ارسال رسالة خاصة للعضو.*'
             
-            await ctx.send(response)
-            logger.info(f"Role '{role.name}' removed from {member.name}#{member.discriminator} by {ctx.author.name}#{ctx.author.discriminator}")
+            await interaction.response.send_message(response)
+            logger.info(f"Role '{role.name}' removed from {member.name}#{member.discriminator} by {interaction.user.name}#{interaction.user.discriminator}")
         except discord.Forbidden:
-            await ctx.send('*لا املك الصلاحية لتعديل الأدوار.*')
+            await interaction.response.send_message('*لا املك الصلاحية لتعديل الأدوار.*', ephemeral=True)
             logger.error(f"Failed to remove role: Insufficient permissions")
         except discord.HTTPException as e:
-            await ctx.send('*حدث خطأ اثناء تعديل الأدوار.*')
+            await interaction.response.send_message('*حدث خطأ اثناء تعديل الأدوار.*', ephemeral=True)
             logger.error(f"Failed to remove role: {str(e)}")
 
     @commands.command()
@@ -150,21 +158,38 @@ class RoleCommands(Cog):
         except Exception as e:
             await ctx.send(f"Error testing DMs: {str(e)}")
 
-    @give_role.error
-    @remove_role.error
-    async def role_command_error(self, ctx, error):
-        """Error handler for role commands"""
-        if isinstance(error, commands.MissingPermissions):
-            await ctx.send('*لا تملك الصلاحية لأستخدام هذه الامر.*')
-        elif isinstance(error, commands.CommandOnCooldown):
-            await ctx.send(f'*الرجاء الانتظار {error.retry_after:.1f} ثواني.*')
-        elif isinstance(error, commands.MemberNotFound):
-            await ctx.send('*لا يوجد شخص بهذا الاسم.*')
-        elif isinstance(error, commands.NoPrivateMessage):
-            await ctx.send('*لا يمكن استخدام هذا الأمر في الرسائل الخاصة.*')
+    async def cog_app_command_error(self, interaction: discord.Interaction, error: app_commands.AppCommandError):
+        """Error handler for application commands"""
+        if isinstance(error, app_commands.CommandOnCooldown):
+            await interaction.response.send_message(
+                f"*الرجاء الانتظار {error.retry_after:.1f} ثواني.*",
+                ephemeral=True
+            )
+        elif isinstance(error, app_commands.MissingPermissions):
+            await interaction.response.send_message(
+                "*لا تملك الصلاحية لأستخدام هذه الامر.*",
+                ephemeral=True
+            )
         else:
             logger.error(f"Unexpected error in role command: {str(error)}")
-            await ctx.send('*حدث خطأ غير متوقع.*')
+            await interaction.response.send_message(
+                "*حدث خطأ غير متوقع.*",
+                ephemeral=True
+            )
 
 async def setup(bot):
-    await bot.add_cog(RoleCommands(bot))
+    """Setup function for loading the cog"""
+    # Create cog instance
+    cog = RoleCommands(bot)
+    
+    # Add cog to bot
+    await bot.add_cog(cog)
+    
+    try:
+        # Register app commands to guild
+        guild = discord.Object(id=Config.GUILD_ID)
+        bot.tree.add_command(cog.give_role, guild=guild)
+        bot.tree.add_command(cog.remove_role, guild=guild)
+        print("Registered role commands to guild")
+    except Exception as e:
+        print(f"Failed to register role commands: {e}")
