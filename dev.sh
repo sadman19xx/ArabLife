@@ -34,33 +34,57 @@ cleanup() {
 
 trap cleanup SIGINT SIGTERM
 
-# Install backend dependencies if venv doesn't exist
+# Setup backend
+echo -e "${YELLOW}Setting up backend...${NC}"
+cd dashboard/backend
+
+# Create and activate virtual environment
 if [ ! -d "venv" ]; then
-    echo -e "${YELLOW}Setting up Python virtual environment...${NC}"
+    echo -e "${YELLOW}Creating virtual environment...${NC}"
     python3 -m venv venv
-    source venv/bin/activate
-    pip install -r requirements.txt
-else
-    source venv/bin/activate
 fi
+
+# Activate virtual environment
+source venv/bin/activate || {
+    echo -e "${RED}Failed to activate virtual environment${NC}"
+    exit 1
+}
+
+# Install backend dependencies
+echo -e "${YELLOW}Installing backend dependencies...${NC}"
+pip install -r requirements.txt || {
+    echo -e "${RED}Failed to install backend dependencies${NC}"
+    exit 1
+}
+
+cd ../..
+
+# Setup frontend
+echo -e "${YELLOW}Setting up frontend...${NC}"
+cd dashboard/frontend
 
 # Create frontend .env file
 echo -e "${YELLOW}Creating frontend environment configuration...${NC}"
-cat > dashboard/frontend/.env << EOL
+cat > .env << EOL
 REACT_APP_API_URL=http://${SERVER_IP}:8000
 EOL
 
 # Install frontend dependencies if node_modules doesn't exist
-cd dashboard/frontend
 if [ ! -d "node_modules" ]; then
     echo -e "${YELLOW}Installing frontend dependencies...${NC}"
-    bash setup-frontend.sh
+    npm install
 fi
+
+# Create public directory if it doesn't exist
+mkdir -p public
+
+cd ../..
 
 # Start backend server
 echo -e "${YELLOW}Starting backend server...${NC}"
-cd ../backend
-uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload &
+cd dashboard/backend
+source venv/bin/activate
+python3 -m uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload &
 
 # Start frontend server
 echo -e "${YELLOW}Starting frontend server...${NC}"
