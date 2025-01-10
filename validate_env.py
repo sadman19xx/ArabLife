@@ -48,9 +48,9 @@ def validate_env():
         print("   3. Go to Bot section")
         print("   4. Click 'Reset Token' or 'Copy' under TOKEN")
         success = False
-    elif len(token) < 50 or not token.strip().replace('.', '').isalnum():
+    elif not token.count('.') == 2:  # Discord tokens have exactly 2 dots
         print("❌ Error: Invalid Discord bot token format")
-        print("   Token should be a long string of letters, numbers, and dots")
+        print("   Token should contain exactly two dots")
         print("   Example format: MTIzNDU2Nzg5MDEyMzQ1Njc4.ABCDEF.ghijklmnopqrstuvwxyz123456")
         print("   Get a new token from Discord Developer Portal")
         success = False
@@ -59,12 +59,30 @@ def validate_env():
     
     # Check FFmpeg installation
     ffmpeg_path = os.getenv('FFMPEG_PATH', '/usr/bin/ffmpeg')
+    # Convert Windows path to Unix path if needed
+    ffmpeg_path = ffmpeg_path.replace('\\', '/').replace('C:', '')
     if not os.path.isfile(ffmpeg_path):
         print("❌ Error: FFmpeg not found at", ffmpeg_path)
         print("   Install FFmpeg with: sudo apt install -y ffmpeg")
         success = False
     else:
         print("✅ FFmpeg found at", ffmpeg_path)
+
+    # Check and fix file paths
+    file_paths = [
+        'WELCOME_SOUND_PATH',
+        'WELCOME_BACKGROUND_URL',
+        'VISA_IMAGE_URL'
+    ]
+    for path_var in file_paths:
+        path = os.getenv(path_var)
+        if path and '\\' in path:
+            print(f"⚠️  Warning: Converting Windows path to Unix path for {path_var}")
+            fixed_path = path.replace('\\', '/')
+            print(f"   Original: {path}")
+            print(f"   Fixed: {fixed_path}")
+            # Update the environment variable
+            os.environ[path_var] = fixed_path
 
     # Validate all required IDs
     for var_name in required_ids:
