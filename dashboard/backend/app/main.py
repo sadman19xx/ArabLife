@@ -13,11 +13,14 @@ from .routers import bot, guilds, commands, settings, automod, leveling
 app = FastAPI(title="ArabLife Bot Dashboard")
 
 # Configure CORS
-
-# Configure CORS
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000"],  # React frontend URL
+    allow_origins=[
+        "http://localhost:3000",          # Local development
+        "http://localhost",               # Local production
+        "http://45.76.83.149",           # Server production
+        "http://45.76.83.149:3000",      # Server development
+    ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

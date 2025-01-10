@@ -1,8 +1,12 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, BackgroundTasks
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 from typing import List, Optional
 import discord
+import subprocess
+import os
+import sys
+import asyncio
 
 from ..database import get_db
 from ..models import Guild, GuildSettings, CustomCommand, WelcomeMessage, AutoMod
@@ -10,12 +14,131 @@ from ..schemas import (
     GuildSettingsUpdate, CustomCommandCreate, CustomCommandUpdate,
     WelcomeMessageCreate, WelcomeMessageUpdate, AutoModUpdate,
     GuildSettingsResponse, CustomCommandResponse, WelcomeMessageResponse,
-    AutoModResponse
+    AutoModResponse, BotInstallRequest, BotStatusResponse
 )
 from ..auth import AuthManager
 from ..models import User
 
 router = APIRouter()
+
+# Bot process management
+bot_process = None
+
+def run_bot():
+    """Run the bot in a separate process"""
+    global bot_process
+    try:
+        # Activate virtual environment and start bot
+        venv_python = os.path.join(os.getcwd(), "venv", "bin", "python")
+        bot_process = subprocess.Popen(
+            [venv_python, "bot.py"],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE
+        )
+    except Exception as e:
+        print(f"Failed to start bot: {e}")
+        bot_process = None
+
+def stop_bot():
+    """Stop the bot process"""
+    global bot_process
+    if bot_process:
+        bot_process.terminate()
+        bot_process = None
+
+@router.post("/install")
+async def install_bot(
+    install_data: BotInstallRequest,
+    background_tasks: BackgroundTasks,
+    current_user: User = Depends(AuthManager.get_current_user)
+):
+    """Install and configure the bot"""
+    try:
+        # Create .env file with configuration
+        env_content = f"""
+TOKEN={install_data.token}
+GUILD_ID={install_data.guild_id}
+ROLE_IDS_ALLOWED={','.join(map(str, install_data.role_ids_allowed))}
+ROLE_ID_TO_GIVE={install_data.role_id_to_give}
+ROLE_ID_REMOVE_ALLOWED={install_data.role_id_remove_allowed}
+ROLE_ACTIVITY_LOG_CHANNEL_ID={install_data.role_activity_log_channel_id}
+AUDIT_LOG_CHANNEL_ID={install_data.audit_log_channel_id}
+VISA_IMAGE_URL={install_data.visa_image_url}
+"""
+        with open(".env", "w") as f:
+            f.write(env_content)
+
+        # Create virtual environment if it doesn't exist
+        if not os.path.exists("venv"):
+            subprocess.run([sys.executable, "-m", "venv", "venv"], check=True)
+
+        # Install dependencies
+        venv_pip = os.path.join(os.getcwd(), "venv", "bin", "pip")
+        subprocess.run([venv_pip, "install", "-r", "requirements.txt"], check=True)
+
+        return {"status": "success", "message": "Bot installed successfully"}
+
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Installation failed: {str(e)}"
+        )
+
+@router.post("/start")
+async def start_bot(
+    background_tasks: BackgroundTasks,
+    current_user: User = Depends(AuthManager.get_current_user)
+):
+    """Start the bot"""
+    global bot_process
+    if bot_process:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Bot is already running"
+        )
+    
+    background_tasks.add_task(run_bot)
+    return {"status": "success", "message": "Bot started"}
+
+@router.post("/stop")
+async def stop_bot_endpoint(
+    current_user: User = Depends(AuthManager.get_current_user)
+):
+    """Stop the bot"""
+    global bot_process
+    if not bot_process:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Bot is not running"
+        )
+    
+    stop_bot()
+    return {"status": "success", "message": "Bot stopped"}
+
+@router.get("/status", response_model=BotStatusResponse)
+async def get_bot_status(
+    current_user: User = Depends(AuthManager.get_current_user)
+):
+    """Get bot status"""
+    global bot_process
+    is_running = bot_process is not None and bot_process.poll() is None
+    
+    if is_running:
+        # Get recent logs
+        logs = []
+        if bot_process.stdout:
+            while True:
+                line = bot_process.stdout.readline()
+                if not line:
+                    break
+                logs.append(line.decode().strip())
+    else:
+        logs = []
+
+    return {
+        "status": "running" if is_running else "stopped",
+        "logs": logs[-50:] if logs else []  # Keep last 50 lines
+    }
 
 async def verify_guild_access(
     guild_id: int,

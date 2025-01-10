@@ -1,101 +1,130 @@
-from pydantic import BaseModel
-from typing import List, Optional, Dict
+from pydantic import BaseModel, HttpUrl
+from typing import List, Optional
 
-# Auth schemas
-class Token(BaseModel):
-    access_token: str
-    token_type: str
+# Bot Installation Schemas
+class BotInstallRequest(BaseModel):
+    token: str
+    guild_id: int
+    role_ids_allowed: List[int]
+    role_id_to_give: int
+    role_id_remove_allowed: int
+    role_activity_log_channel_id: int
+    audit_log_channel_id: int
+    visa_image_url: HttpUrl
 
-class TokenData(BaseModel):
-    username: Optional[str] = None
+class BotStatusResponse(BaseModel):
+    status: str  # "running" or "stopped"
+    logs: List[str]
 
-class User(BaseModel):
-    username: str
-    email: Optional[str] = None
-    full_name: Optional[str] = None
-    disabled: Optional[bool] = None
+# Guild Settings Schemas
+class GuildSettingsBase(BaseModel):
+    prefix: str = "/"
+    language: str = "en"
+    timezone: str = "UTC"
+    welcome_channel_id: Optional[int] = None
+    log_channel_id: Optional[int] = None
+    mute_role_id: Optional[int] = None
+    auto_role_id: Optional[int] = None
 
-# Bot schemas
-class BotStatus(BaseModel):
-    is_online: bool
-    uptime: str
-    guild_count: int
-    member_count: int
+class GuildSettingsCreate(GuildSettingsBase):
+    guild_id: int
 
-# Guild schemas
-class Guild(BaseModel):
-    id: str
+class GuildSettingsUpdate(GuildSettingsBase):
+    pass
+
+class GuildSettingsResponse(GuildSettingsBase):
+    id: int
+    guild_id: int
+
+    class Config:
+        orm_mode = True
+
+# Custom Command Schemas
+class CustomCommandBase(BaseModel):
     name: str
-    icon: Optional[str]
-    member_count: int
-    owner_id: str
+    response: str
+    description: Optional[str] = None
+    enabled: bool = True
 
-# Command schemas
-class Command(BaseModel):
-    name: str
-    description: str
-    usage: str
-    category: str
-    is_enabled: bool
+class CustomCommandCreate(CustomCommandBase):
+    guild_id: int
 
-# Settings schemas
-class WelcomeSettings(BaseModel):
-    channel_id: Optional[str]
-    message: str
-    is_enabled: bool
+class CustomCommandUpdate(CustomCommandBase):
+    pass
 
-class RoleSettings(BaseModel):
-    role_id: str
-    name: str
-    color: str
-    position: int
+class CustomCommandResponse(CustomCommandBase):
+    id: int
+    guild_id: int
 
-# AutoMod schemas
-class AutoModSettings(BaseModel):
-    is_enabled: bool
-    banned_words: List[str]
-    banned_links: List[str]
-    spam_threshold: int
-    spam_interval: int
-    raid_threshold: int
-    raid_interval: int
-    action_type: str
+    class Config:
+        orm_mode = True
 
-class AutoModAction(BaseModel):
-    user_id: str
-    action: str
-    reason: str
-    timestamp: str
+# Welcome Message Schemas
+class WelcomeMessageBase(BaseModel):
+    content: str
+    embed_title: Optional[str] = None
+    embed_description: Optional[str] = None
+    embed_color: Optional[int] = None
+    enabled: bool = True
 
-# Leveling schemas
-class RoleReward(BaseModel):
-    level: int
-    role_id: str
+class WelcomeMessageCreate(WelcomeMessageBase):
+    guild_id: int
 
-class LevelingSettings(BaseModel):
-    is_enabled: bool
-    xp_per_message: int
-    xp_cooldown: int
-    level_up_channel_id: Optional[str]
-    level_up_message: str
-    role_rewards: List[RoleReward]
+class WelcomeMessageUpdate(WelcomeMessageBase):
+    pass
 
-class UserLevel(BaseModel):
-    user_discord_id: str
-    username: str
-    level: int
-    xp: int
-    rank: int
+class WelcomeMessageResponse(WelcomeMessageBase):
+    id: int
+    guild_id: int
 
-class LeaderboardEntry(BaseModel):
-    user_discord_id: str
-    username: str
-    level: int
-    xp: int
-    rank: int
+    class Config:
+        orm_mode = True
 
-# Response schemas
-class Response(BaseModel):
-    success: bool
-    message: str
-    data: Optional[Dict] = None
+# AutoMod Schemas
+class AutoModBase(BaseModel):
+    enabled: bool = True
+    spam_detection: bool = True
+    spam_threshold: int = 5
+    spam_interval: int = 5
+    raid_protection: bool = True
+    raid_threshold: int = 10
+    raid_interval: int = 30
+    banned_words: List[str] = []
+    warn_threshold: int = 3
+    mute_duration: int = 300
+    ban_duration: Optional[int] = None
+
+class AutoModCreate(AutoModBase):
+    guild_id: int
+
+class AutoModUpdate(AutoModBase):
+    pass
+
+class AutoModResponse(AutoModBase):
+    id: int
+    guild_id: int
+
+    class Config:
+        orm_mode = True
+
+# Leveling Schemas
+class LevelingSettingsBase(BaseModel):
+    enabled: bool = True
+    xp_per_message: int = 15
+    xp_cooldown: int = 60
+    level_up_channel_id: Optional[int] = None
+    level_up_message: str = "Congratulations {user}! You reached level {level}!"
+    role_rewards: dict = {}
+
+class LevelingSettingsCreate(LevelingSettingsBase):
+    guild_id: int
+
+class LevelingSettingsUpdate(LevelingSettingsBase):
+    pass
+
+class LevelingSettingsResponse(LevelingSettingsBase):
+    id: int
+    guild_id: int
+
+    class Config:
+        orm_mode = True

@@ -14,6 +14,7 @@ const Settings = React.lazy(() => import('./pages/Settings'));
 const Welcome = React.lazy(() => import('./pages/Welcome'));
 const AutoMod = React.lazy(() => import('./pages/AutoMod'));
 const Leveling = React.lazy(() => import('./pages/Leveling'));
+const BotInstall = React.lazy(() => import('./pages/BotInstall'));
 
 function App() {
   const { isAuthenticated, isLoading } = useAuth();
@@ -60,6 +61,7 @@ function App() {
         <Route element={<ProtectedRoute isAuthenticated={isAuthenticated} />}>
           <Route element={<Layout />}>
             <Route path="/dashboard" element={<Dashboard />} />
+            <Route path="/bot/install" element={<BotInstall />} />
             <Route path="/guilds/:guildId" element={<GuildDashboard />} />
             <Route path="/guilds/:guildId/commands" element={<Commands />} />
             <Route path="/guilds/:guildId/settings" element={<Settings />} />

@@ -14,6 +14,7 @@ import {
   Typography,
   useTheme,
   useMediaQuery,
+  Divider,
 } from '@mui/material';
 import {
   Menu as MenuIcon,
@@ -24,6 +25,7 @@ import {
   Security as SecurityIcon,
   EmojiEvents as LevelingIcon,
   Logout as LogoutIcon,
+  SmartToy as BotIcon,
 } from '@mui/icons-material';
 import useAuth from '../hooks/useAuth';
 
@@ -41,6 +43,7 @@ const Layout: React.FC = () => {
   };
 
   const menuItems = [
+    { text: 'Bot Installation', icon: <BotIcon />, path: '/bot/install' },
     { text: 'Dashboard', icon: <DashboardIcon />, path: '/dashboard' },
     { text: 'Commands', icon: <CodeIcon />, path: '/commands' },
     { text: 'Settings', icon: <SettingsIcon />, path: '/settings' },
@@ -57,21 +60,24 @@ const Layout: React.FC = () => {
         </Typography>
       </Toolbar>
       <List>
-        {menuItems.map((item) => (
-          <ListItem
-            button
-            key={item.text}
-            onClick={() => {
-              navigate(item.path);
-              if (isMobile) {
-                handleDrawerToggle();
-              }
-            }}
-          >
-            <ListItemIcon>{item.icon}</ListItemIcon>
-            <ListItemText primary={item.text} />
-          </ListItem>
+        {menuItems.map((item, index) => (
+          <React.Fragment key={item.text}>
+            {index === 1 && <Divider />}
+            <ListItem
+              button
+              onClick={() => {
+                navigate(item.path);
+                if (isMobile) {
+                  handleDrawerToggle();
+                }
+              }}
+            >
+              <ListItemIcon>{item.icon}</ListItemIcon>
+              <ListItemText primary={item.text} />
+            </ListItem>
+          </React.Fragment>
         ))}
+        <Divider />
         <ListItem
           button
           onClick={() => {

@@ -2,7 +2,64 @@
 
 A Discord bot for managing roles, voice channels, tickets, and more.
 
-## Step-by-Step Setup Guide
+## Installation Methods
+
+You can install and manage the bot in two ways:
+
+### Method 1: Web Dashboard (Recommended)
+
+1. Access the dashboard:
+```
+http://45.76.83.149
+```
+
+The web interface provides:
+- Easy bot installation and configuration
+- Real-time bot status monitoring
+- Start/stop controls
+- Live log viewer
+
+2. Navigate to "Bot Installation" in the sidebar
+3. Fill in the required information:
+   - Bot Token
+   - Server ID
+   - Role IDs
+   - Channel IDs
+4. Click "Install Bot" to set up the bot
+5. Use the control panel to start/stop the bot and view logs
+
+### Method 2: Command Line
+
+1. Connect to the server:
+```bash
+ssh root@45.76.83.149
+```
+
+2. Make the installation script executable:
+```bash
+chmod +x install.sh
+```
+
+3. Run the installation script:
+```bash
+sudo ./install.sh
+```
+
+4. During installation, you'll be prompted for:
+   - Discord Bot Token
+   - Server ID
+   - Role IDs
+   - Channel IDs
+
+5. After installation, use these commands to manage the bot:
+```bash
+./start.sh start    # Start the bot
+./start.sh stop     # Stop the bot
+./start.sh restart  # Restart the bot
+./start.sh status   # Check bot status
+```
+
+## Getting Required Information
 
 ### 1. Create Discord Bot Application
 
@@ -14,7 +71,7 @@ A Discord bot for managing roles, voice channels, tickets, and more.
    - Click "Add Bot"
    - Click "Yes, do it!"
 4. Under the bot's username:
-   - Click "Copy" to copy your bot token (or "Reset Token" if needed)
+   - Click "Copy" to copy your bot token
    - Save this token - you'll need it during installation
 5. Enable Required Intents:
    - PRESENCE INTENT
@@ -61,68 +118,6 @@ A Discord bot for managing roles, voice channels, tickets, and more.
      * Role Activity Log Channel ID
      * Audit Log Channel ID
 
-### 3. Server Installation
-
-1. Connect to your server via SSH
-
-2. Clone the repository:
-```bash
-git clone https://github.com/your-username/ArabLife.git
-cd ArabLife
-```
-
-3. Make scripts executable:
-```bash
-chmod +x install.sh start.sh
-```
-
-4. Run installation script:
-```bash
-sudo ./install.sh
-```
-
-5. During installation, you'll be prompted for:
-   - Discord Bot Token (from step 1)
-   - Server ID (from step 2)
-   - Role IDs (from step 2)
-   - Channel IDs (from step 2)
-
-### 4. Verify Installation
-
-Before running the bot, verify everything is set up correctly:
-```bash
-chmod +x verify.sh
-./verify.sh
-```
-
-This will check:
-- System dependencies
-- Python environment
-- Configuration files
-- Required bot files
-- Cog files
-- Bot status
-
-Fix any issues reported by the verification script.
-
-### 5. Running the Bot
-
-After verification passes, start the bot:
-```bash
-./start.sh start
-```
-
-Other commands:
-```bash
-./start.sh stop     # Stop the bot
-./start.sh restart  # Restart the bot
-./start.sh status   # Check bot status
-```
-
-View bot console:
-1. Type: `screen -r arablife`
-2. To detach from console: Press `Ctrl+A` then `D`
-
 ## Features
 
 - Role management
@@ -133,16 +128,39 @@ View bot console:
 - Leveling system
 - Auto-moderation
 
+## Development
+
+To work on the bot's code:
+
+1. Connect to the server:
+```bash
+ssh root@45.76.83.149
+```
+
+2. Start development servers:
+```bash
+./dev.sh
+```
+
+This will:
+- Start the FastAPI backend server (http://45.76.83.149:8000)
+- Start the React frontend server (http://45.76.83.149)
+- Watch for changes and reload automatically
+
+3. Access the API documentation:
+- OpenAPI docs: http://45.76.83.149:8000/docs
+- ReDoc: http://45.76.83.149:8000/redoc
+
 ## Troubleshooting
 
-If the bot isn't working:
+If you encounter issues:
 
-1. Check Bot Status:
+1. Check the bot's status:
 ```bash
 ./start.sh status
 ```
 
-2. View Error Messages:
+2. View error messages:
 ```bash
 screen -r arablife
 ```
