@@ -1,5 +1,6 @@
 import discord
 from discord.ext import commands
+from discord import app_commands
 from discord.ext.commands import Cog
 import logging
 import json
@@ -11,6 +12,7 @@ import os
 import re
 from collections import defaultdict, deque
 from config import Config
+from utils.database import db
 
 logger = logging.getLogger('discord')
 
@@ -74,9 +76,9 @@ class AutoModCommands(Cog):
     async def log_action(self, guild_id: int, user_id: int, action: str, reason: str):
         """Log automod action to database"""
         try:
-            async with aiosqlite.connect(self.db_path) as db:
+            async with aiosqlite.connect(db.db_path) as conn:
                 # Get guild's database ID
-                async with db.execute(
+                async with conn.execute(
                     'SELECT id FROM guilds WHERE discord_id = ?',
                     (str(guild_id),)
                 ) as cursor:
@@ -85,11 +87,11 @@ class AutoModCommands(Cog):
                         return
                     db_guild_id = guild_result[0]
                 
-                await db.execute('''
+                await conn.execute('''
                     INSERT INTO automod_logs (guild_id, user_id, action, reason, timestamp)
                     VALUES (?, ?, ?, ?, ?)
                 ''', (db_guild_id, user_id, action, reason, datetime.now().isoformat()))
-                await db.commit()
+                await conn.commit()
         except Exception as e:
             logger.error(f"Failed to log action: {str(e)}")
 
@@ -685,5 +687,48 @@ class AutoModCommands(Cog):
                 ephemeral=True
             )
 
+    async def cog_app_command_error(self, interaction: discord.Interaction, error: app_commands.AppCommandError):
+        """Error handler for application commands"""
+        if isinstance(error, app_commands.CommandOnCooldown):
+            await interaction.response.send_message(
+                f"*الرجاء الانتظار {error.retry_after:.1f} ثواني.*",
+                ephemeral=True
+            )
+        elif isinstance(error, app_commands.MissingPermissions):
+            await interaction.response.send_message(
+                "*لا تملك الصلاحية لأستخدام هذه الامر.*",
+                ephemeral=True
+            )
+        else:
+            logger.error(f"AutoMod command error: {str(error)}")
+            await interaction.response.send_message(
+                "*حدث خطأ غير متوقع.*",
+                ephemeral=True
+            )
+
 async def setup(bot):
-    await bot.add_cog(AutoModCommands(bot))
+    """Setup function for loading the cog"""
+    # Create cog instance
+    cog = AutoModCommands(bot)
+    
+    # Add cog to bot
+    await bot.add_cog(cog)
+    
+    try:
+        # Register app commands to guild
+        guild = discord.Object(id=Config.GUILD_ID)
+        commands = [
+            cog.automod_toggle,
+            cog.set_action,
+            cog.manage_exempt,
+            cog.manage_words,
+            cog.manage_links,
+            cog.automod_status,
+            cog.set_spam_settings,
+            cog.set_raid_settings
+        ]
+        for cmd in commands:
+            bot.tree.add_command(cmd, guild=guild)
+        print("Registered automod commands to guild")
+    except Exception as e:
+        print(f"Failed to register automod commands: {e}")

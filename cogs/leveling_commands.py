@@ -1,5 +1,6 @@
 import discord
 from discord.ext import commands
+from discord import app_commands
 from discord.ext.commands import Cog
 import logging
 import json
@@ -9,6 +10,7 @@ from typing import Dict, Optional, Union
 import aiosqlite
 import os
 from config import Config
+from utils.database import db
 
 logger = logging.getLogger('discord')
 
@@ -57,19 +59,6 @@ class LevelingCommands(Cog):
                     settings = await cursor.fetchone()
                     
             return dict(settings)
-
-    async def save_settings(self):
-        """Save current settings to database"""
-        try:
-            async with aiosqlite.connect(self.db_path) as db:
-                await db.execute('''
-                    UPDATE guild_settings 
-                    SET custom_settings = json_set(custom_settings, '$.leveling', ?)
-                    WHERE guild_id = (SELECT id FROM guilds WHERE discord_id = ?)
-                ''', (json.dumps(self.settings), str(Config.GUILD_ID)))
-                await db.commit()
-        except Exception as e:
-            logger.error(f"Failed to save settings: {str(e)}")
 
     async def calculate_xp_gain(self, message: discord.Message, base_xp: int) -> int:
         """Calculate XP gain with multipliers"""
@@ -477,5 +466,45 @@ class LevelingCommands(Cog):
                 ephemeral=True
             )
 
+    async def cog_app_command_error(self, interaction: discord.Interaction, error: app_commands.AppCommandError):
+        """Error handler for application commands"""
+        if isinstance(error, app_commands.CommandOnCooldown):
+            await interaction.response.send_message(
+                f"*الرجاء الانتظار {error.retry_after:.1f} ثواني.*",
+                ephemeral=True
+            )
+        elif isinstance(error, app_commands.MissingPermissions):
+            await interaction.response.send_message(
+                "*لا تملك الصلاحية لأستخدام هذه الامر.*",
+                ephemeral=True
+            )
+        else:
+            logger.error(f"Leveling command error: {str(error)}")
+            await interaction.response.send_message(
+                "*حدث خطأ غير متوقع.*",
+                ephemeral=True
+            )
+
 async def setup(bot):
-    await bot.add_cog(LevelingCommands(bot))
+    """Setup function for loading the cog"""
+    # Create cog instance
+    cog = LevelingCommands(bot)
+    
+    # Add cog to bot
+    await bot.add_cog(cog)
+    
+    try:
+        # Register app commands to guild
+        guild = discord.Object(id=Config.GUILD_ID)
+        commands = [
+            cog.rank,
+            cog.leaderboard,
+            cog.setxp,
+            cog.set_multiplier,
+            cog.remove_multiplier
+        ]
+        for cmd in commands:
+            bot.tree.add_command(cmd, guild=guild)
+        print("Registered leveling commands to guild")
+    except Exception as e:
+        print(f"Failed to register leveling commands: {e}")
