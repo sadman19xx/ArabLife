@@ -1,160 +1,82 @@
-# ArabLife Bot Installation Guide
+# ArabLife Discord Bot
 
-## Installation on bot-hosting.net
+A Discord bot for managing roles, voice channels, tickets, and more.
 
-### 1. Required Files
-Upload the following files and directories to your bot hosting:
-```
-├── bot.py
-├── config.py
-├── requirements.txt
-├── cogs/
-│   ├── automod_commands.py
-│   ├── help_commands.py
-│   ├── leveling_commands.py
-│   ├── role_commands.py
-│   ├── security_commands.py
-│   ├── status_commands.py
-│   ├── ticket_commands.py
-│   ├── voice_commands.py
-│   └── welcome_commands.py
-├── utils/
-│   └── logger.py
-├── data/
-└── fonts/
-    └── arabic.ttf
-```
+## Installation
 
-### 2. Create requirements.txt
-Create a `requirements.txt` file with these dependencies:
-```
-discord.py==2.3.2
-python-dotenv==1.0.0
-aiosqlite==0.19.0
-```
-
-### 3. Environment Variables
-In the bot-hosting.net control panel, set up these environment variables:
-
-Required Variables:
-```
-TOKEN=your_discord_bot_token
-GUILD_ID=your_guild_id
-ROLE_IDS_ALLOWED=comma,separated,role,ids
-ROLE_ID_TO_GIVE=role_id
-ROLE_ID_REMOVE_ALLOWED=role_id
-ROLE_ACTIVITY_LOG_CHANNEL_ID=channel_id
-AUDIT_LOG_CHANNEL_ID=channel_id
-```
-
-Optional Variables (with defaults):
-```
-# Welcome Settings
-WELCOME_CHANNEL_ID=0
-WELCOME_BACKGROUND_URL=https://i.imgur.com/your_background.png
-WELCOME_MESSAGE=Welcome {user} to {server}! 🎉
-GOODBYE_MESSAGE=Goodbye {user}, we hope to see you again! 👋
-WELCOME_EMBED_COLOR=0x2ecc71
-WELCOME_EMBED_TITLE=Welcome to {server}!
-WELCOME_EMBED_DESCRIPTION=Welcome {user} to our community!\n\nMember Count: {member_count}
-
-# Voice Settings
-WELCOME_SOUND_PATH=welcome.mp3
-DEFAULT_VOLUME=0.5
-
-# Command Cooldowns
-ROLE_COMMAND_COOLDOWN=5
-STATUS_COMMAND_COOLDOWN=10
-SOUND_COMMAND_COOLDOWN=5
-
-# Security Settings
-MAX_STATUS_LENGTH=100
-BLACKLISTED_WORDS=word1,word2,word3
-MAX_MENTIONS=5
-RAID_PROTECTION=true
-MIN_ACCOUNT_AGE=7
-ALLOWED_DOMAINS=discord.com,discord.gg
-SPAM_DETECTION=true
-AUTO_TIMEOUT_DURATION=3600
-
-# AutoMod Settings
-AUTOMOD_ENABLED=true
-AUTOMOD_SPAM_THRESHOLD=5
-AUTOMOD_SPAM_INTERVAL=5
-AUTOMOD_RAID_THRESHOLD=10
-AUTOMOD_RAID_INTERVAL=30
-AUTOMOD_ACTION=warn
-
-# Leveling Settings
-LEVELING_ENABLED=true
-XP_PER_MESSAGE=15
-XP_COOLDOWN=60
-LEVEL_UP_MESSAGE=Congratulations {user}! You reached level {level}!
-ROLE_REWARDS=[]
-
-# Ticket Settings
-TICKET_STAFF_ROLE_ID=0
-TICKET_CATEGORY_ID=0
-TICKET_LOG_CHANNEL_ID=0
-
-# Department Role IDs
-PLAYER_REPORT_ROLE_ID=0
-HEALTH_DEPT_ROLE_ID=0
-INTERIOR_DEPT_ROLE_ID=0
-FEEDBACK_ROLE_ID=0
-```
-
-### 4. Python Version
-Set Python version to 3.10 or higher in the bot-hosting.net control panel.
-
-### 5. Startup Command
-Set the startup command to:
+1. Clone this repository to your server
+2. Make the install script executable:
 ```bash
-python bot.py
+chmod +x install.sh
 ```
 
-### 6. File Permissions
-Make sure all files have the correct permissions:
+3. Run the installation script as root:
 ```bash
-chmod +x bot.py
-chmod -R 755 cogs/
-chmod -R 755 utils/
-chmod -R 777 data/
+sudo ./install.sh
 ```
 
-### 7. Database Setup
-The bot will automatically create the required database files in the `data/` directory on first run.
+The script will:
+- Install required system dependencies
+- Set up Python virtual environment
+- Install Python packages
+- Create configuration file
+- Clean up unnecessary files
+- Set up the bot in /opt/arablife
 
-### 8. Starting the Bot
-1. Upload all files to your bot hosting
-2. Set all environment variables
-3. Set Python version to 3.10+
-4. Set startup command
-5. Start the bot from the control panel
+During installation, you'll need to provide:
+- Discord Bot Token
+- Server (Guild) ID
+- Role IDs
+- Channel IDs
 
-### 9. Verifying Installation
-After starting the bot:
-1. Check the console logs for any errors
-2. Verify the bot comes online in your Discord server
-3. Test basic commands like `/help`
-4. Check if the database files are created in the `data/` directory
+## Usage
 
-### 10. Troubleshooting
-If you encounter issues:
-1. Check the console logs for error messages
-2. Verify all required environment variables are set
-3. Ensure all required files are uploaded
-4. Check file permissions
-5. Verify Python version is 3.10 or higher
+The bot can be controlled using the following commands:
 
-### 11. Dashboard Setup (Optional)
-The dashboard requires additional setup and a separate hosting service. Contact support if you need help setting up the dashboard.
+```bash
+# Start the bot
+./start.sh start
 
-### 12. Support
-If you need help:
-1. Check the error logs in the bot-hosting.net control panel
-2. Review the configuration in the control panel
-3. Contact support with specific error messages
+# Stop the bot
+./start.sh stop
 
-### Security Note
-Never share your bot token or sensitive environment variables. Keep your `.env` file secure and never commit it to version control.
+# Restart the bot
+./start.sh restart
+
+# Check bot status
+./start.sh status
+```
+
+To view the bot console:
+1. Type: `screen -r arablife`
+2. To detach from console: Press `Ctrl+A` then `D`
+
+## Required Permissions
+
+The bot requires the following permissions:
+- Manage Roles
+- Manage Channels
+- View Channels
+- Send Messages
+- Manage Messages
+- Read Message History
+- Connect to Voice
+- Speak in Voice
+
+## Features
+
+- Role management
+- Voice channel controls
+- Ticket system
+- Welcome messages
+- Security features
+- Leveling system
+- Auto-moderation
+
+## Support
+
+If you encounter any issues:
+1. Check the bot console for error messages
+2. Verify all IDs in the .env file are correct
+3. Ensure the bot has the required permissions
+4. Check if all dependencies are installed correctly

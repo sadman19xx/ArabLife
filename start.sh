@@ -17,13 +17,18 @@ check_screen() {
 # Function to start the bot
 start_bot() {
     echo -e "${YELLOW}Starting ArabLife bot...${NC}"
-    # Create the command that will run inside screen
-    COMMAND="cd ${DIR} && source venv/bin/activate && python3 bot.py"
-    screen -dmS arablife bash -c "${COMMAND}"
-    echo -e "${GREEN}Bot started in screen session 'arablife'${NC}"
-    echo -e "${YELLOW}To view the bot console:${NC}"
-    echo -e "1. Type: ${GREEN}screen -r arablife${NC}"
-    echo -e "2. To detach from console: Press ${GREEN}Ctrl+A${NC} then ${GREEN}D${NC}"
+    cd "${DIR}"
+    source venv/bin/activate
+    screen -dmS arablife python3 bot.py
+    sleep 2
+    if check_screen; then
+        echo -e "${GREEN}Bot started successfully in screen session 'arablife'${NC}"
+        echo -e "${YELLOW}To view the bot console:${NC}"
+        echo -e "1. Type: ${GREEN}screen -r arablife${NC}"
+        echo -e "2. To detach from console: Press ${GREEN}Ctrl+A${NC} then ${GREEN}D${NC}"
+    else
+        echo -e "${RED}Failed to start bot. Check logs for errors.${NC}"
+    fi
 }
 
 # Function to stop the bot
@@ -38,8 +43,7 @@ case "$1" in
     start)
         if check_screen; then
             echo -e "${RED}Bot is already running!${NC}"
-            echo -e "Use ${GREEN}./start.sh status${NC} to check status"
-            echo -e "Use ${GREEN}./start.sh restart${NC} to restart"
+            echo -e "To view console: ${GREEN}screen -r arablife${NC}"
         else
             start_bot
         fi
@@ -64,7 +68,6 @@ case "$1" in
             echo -e "To view console: ${GREEN}screen -r arablife${NC}"
         else
             echo -e "${RED}Bot is not running!${NC}"
-            echo -e "To start bot: ${GREEN}./start.sh start${NC}"
         fi
         ;;
     *)
