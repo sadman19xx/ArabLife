@@ -1,227 +1,161 @@
-# Discord Bot Setup Guide
+# دليل إعداد البوت
 
-This guide will walk you through setting up your bot on Discord and getting the necessary token and permissions.
+هذا الدليل سيساعدك في إعداد وتشغيل البوت بشكل صحيح.
 
-## Step 1: Create a Discord Application
+## المتطلبات الأساسية
 
-1. Go to [Discord Developer Portal](https://discord.com/developers/applications)
-2. Click "New Application" in the top right
-3. Enter a name for your bot (e.g., "ArabLife Bot")
-4. Click "Create"
+1. Python 3.8 أو أحدث
+2. FFmpeg (للميزات الصوتية)
+3. توكن بوت Discord
+4. معرف السيرفر (Guild ID)
 
-## Step 2: Create a Bot User
+## خطوات الإعداد
 
-1. Click on "Bot" in the left sidebar
-2. Click "Add Bot"
-3. Confirm by clicking "Yes, do it!"
-4. Under the bot's username, you'll see several options:
-   - Enable "Public Bot" if you want others to invite your bot
-   - Enable "Presence Intent" under "Privileged Gateway Intents"
-   - Enable "Server Members Intent"
-   - Enable "Message Content Intent"
-
-## Step 3: Get Your Bot Token
-
-1. In the "Bot" section, click "Reset Token" or "Copy" under the token section
-2. Save this token - you'll need it for your .env file
-   - ⚠️ IMPORTANT: Never share your token! If exposed, reset it immediately
-   - The token should look like: `MTIzNDU2Nzg5MDEyMzQ1Njc4.ABCDEF.ghijklmnopqrstuvwxyz123456`
-
-## Step 4: Set Bot Permissions
-
-1. Click on "OAuth2" in the left sidebar
-2. Click on "URL Generator"
-3. In "Scopes", select:
-   - [x] `bot`
-   - [x] `applications.commands`
-
-4. In "Bot Permissions", select:
-   - General Permissions:
-     - [x] View Channels
-     - [x] Manage Channels
-     - [x] Manage Roles
-     - [x] View Audit Log
-     - [x] Manage Webhooks
-     - [x] Manage Server
-
-   - Membership Permissions:
-     - [x] Create Invite
-     - [x] Change Nickname
-     - [x] Manage Nicknames
-     - [x] Kick Members
-     - [x] Ban Members
-     - [x] Moderate Members
-
-   - Text Channel Permissions:
-     - [x] Send Messages
-     - [x] Send Messages in Threads
-     - [x] Create Public Threads
-     - [x] Create Private Threads
-     - [x] Embed Links
-     - [x] Attach Files
-     - [x] Add Reactions
-     - [x] Use External Emojis
-     - [x] Use External Stickers
-     - [x] Mention Everyone
-     - [x] Manage Messages
-     - [x] Manage Threads
-     - [x] Read Message History
-     - [x] Send TTS Messages
-     - [x] Use Application Commands
-
-   - Voice Channel Permissions:
-     - [x] Connect
-     - [x] Speak
-     - [x] Stream
-     - [x] Use Voice Activity
-     - [x] Priority Speaker
-     - [x] Mute Members
-     - [x] Deafen Members
-     - [x] Move Members
-
-## Step 5: Invite Bot to Your Server
-
-1. After selecting permissions, scroll down to find the generated URL
-2. Copy the URL
-3. Open the URL in a new browser tab
-4. Select your server from the dropdown
-5. Click "Continue"
-6. Review permissions and click "Authorize"
-7. Complete the CAPTCHA if prompted
-
-## Step 6: Configure Bot Settings
-
-1. Copy `.env.example` to `.env`:
+1. قم بنسخ ملف `.env.example` إلى `.env`:
 ```bash
 cp .env.example .env
 ```
 
-2. Edit `.env` with your bot's token:
-```env
-TOKEN=your_bot_token_here
-```
+2. قم بتعديل ملف `.env` وإضافة المعلومات المطلوبة:
+- `TOKEN`: توكن البوت من [Discord Developer Portal](https://discord.com/developers/applications)
+- `GUILD_ID`: معرف السيرفر
+- معرفات القنوات والرتب المطلوبة
 
-3. Get your server (guild) ID:
-   - Enable Developer Mode in Discord:
-     1. Open Discord Settings
-     2. Go to App Settings → Advanced
-     3. Enable Developer Mode
-   - Right-click your server name
-   - Click "Copy ID"
-   - Add to .env:
-     ```env
-     GUILD_ID=your_server_id_here
-     ```
-
-4. Get role IDs:
-   - Right-click each role
-   - Click "Copy ID"
-   - Add to .env:
-     ```env
-     ROLE_IDS_ALLOWED=role_id1,role_id2
-     ROLE_ID_TO_GIVE=role_id
-     ROLE_ID_REMOVE_ALLOWED=role_id
-     ```
-
-5. Get channel IDs:
-   - Right-click each channel
-   - Click "Copy ID"
-   - Add to .env:
-     ```env
-     ROLE_ACTIVITY_LOG_CHANNEL_ID=channel_id
-     AUDIT_LOG_CHANNEL_ID=channel_id
-     WELCOME_CHANNEL_ID=channel_id
-     ```
-
-## Step 7: Start the Services
-
-1. Install dependencies and start the bot:
+3. قم بتثبيت المتطلبات البرمجية:
 ```bash
-# Install bot dependencies
-./setup.sh
-
-# Start the bot service
-sudo systemctl start arablife-bot
-
-# Verify bot is running
-sudo systemctl status arablife-bot
+pip install -r requirements.txt
 ```
 
-2. Start the dashboard API:
+4. قم بتشغيل البوت:
 ```bash
-# Start the API service
-sudo systemctl start arablife-dashboard-api
-
-# Verify API is running
-sudo systemctl status arablife-dashboard-api
+python bot.py
 ```
 
-3. Configure and start Nginx:
+## إعداد الميزات
+
+### نظام التذاكر
+
+1. قم بإنشاء:
+   - رتبة للموظفين (`TICKET_STAFF_ROLE_ID`)
+   - فئة للتذاكر (`TICKET_CATEGORY_ID`)
+   - قناة لسجلات التذاكر (`TICKET_LOG_CHANNEL_ID`)
+   - رتب للأقسام المختلفة (شكاوى اللاعبين، الصحة، الداخلية، الاقتراحات)
+
+2. أضف المعرفات في ملف `.env`
+
+3. استخدم الأمر `/setup-tickets` في القناة المطلوبة
+
+### نظام الحماية
+
+1. قم بتكوين إعدادات الحماية في `.env`:
+   - `WARNING_THRESHOLD`: عدد التحذيرات قبل اتخاذ إجراء
+   - `WARNING_ACTION`: نوع الإجراء (timeout, kick, ban)
+   - `RAID_PROTECTION`: تفعيل الحماية من الهجمات
+   - `SPAM_DETECTION`: تفعيل الحماية من الرسائل المكررة
+
+2. حدد الرتب المستثناة من الفحوصات الأمنية في `EXEMPT_ROLES`
+
+### نظام المستويات
+
+1. قم بتكوين إعدادات المستويات في `.env`:
+   - `XP_PER_MESSAGE`: نقاط الخبرة لكل رسالة
+   - `XP_COOLDOWN`: الوقت بين كل منح للنقاط
+   - `ROLE_REWARDS`: الرتب التي تُمنح عند الوصول لمستويات معينة
+
+2. حدد قناة إعلانات المستويات في `LEVEL_UP_CHANNEL_ID`
+
+### نظام المراقبة الآلي
+
+1. قم بتكوين إعدادات المراقبة في `.env`:
+   - `AUTOMOD_SPAM_THRESHOLD`: عدد الرسائل المسموح في الفترة المحددة
+   - `AUTOMOD_RAID_THRESHOLD`: عدد الانضمامات التي تعتبر هجوماً
+   - `AUTOMOD_ACTION`: الإجراء المتخذ عند المخالفة
+
+2. حدد القنوات والرتب المستثناة في:
+   - `AUTOMOD_IGNORED_CHANNELS`
+   - `AUTOMOD_IGNORED_ROLES`
+
+## الأوامر المتاحة
+
+استخدم `/help` لعرض قائمة الأوامر المتاحة، أو أضف اسم الفئة للحصول على تفاصيل أكثر:
+
+- `/help tickets` - نظام التذاكر
+- `/help security` - نظام الحماية
+- `/help leveling` - نظام المستويات
+- `/help automod` - نظام المراقبة الآلي
+- `/help welcome` - نظام الترحيب
+- `/help roles` - إدارة الرتب
+- `/help voice` - إعدادات الصوت
+- `/help status` - حالة البوت
+- `/help admin` - أوامر الإدارة
+
+## السجلات والمراقبة
+
+1. السجلات تُحفظ في:
+   - ملف السجلات: `logs/bot.log`
+   - قناة الأخطاء: `ERROR_LOG_CHANNEL_ID`
+   - قناة المراقبة: `AUDIT_LOG_CHANNEL_ID`
+   - قناة نشاط الرتب: `ROLE_ACTIVITY_LOG_CHANNEL_ID`
+
+2. يمكن تعديل إعدادات السجلات في `.env`:
+   - `LOG_LEVEL`: مستوى تفصيل السجلات
+   - `LOG_MAX_BYTES`: الحجم الأقصى لملف السجلات
+   - `LOG_BACKUP_COUNT`: عدد نسخ السجلات القديمة
+
+## حل المشاكل
+
+1. **البوت لا يستجيب للأوامر**:
+   - تأكد من صحة التوكن
+   - تأكد من تفعيل Privileged Gateway Intents
+   - تحقق من صلاحيات البوت في السيرفر
+
+2. **مشاكل في نظام التذاكر**:
+   - تأكد من صحة معرفات الرتب والقنوات
+   - تحقق من صلاحيات البوت في فئة التذاكر
+
+3. **مشاكل في الميزات الصوتية**:
+   - تأكد من تثبيت FFmpeg
+   - تحقق من مسار FFmpeg في `.env`
+
+4. **أخطاء في قاعدة البيانات**:
+   - تأكد من وجود مجلد `data`
+   - تحقق من صلاحيات الكتابة
+
+## الأمان والحماية
+
+1. احمِ ملف `.env`:
+   - لا تشارك الملف أبداً
+   - أضفه إلى `.gitignore`
+   - استخدم صلاحيات ملف محدودة
+
+2. راقب سجلات البوت:
+   - تحقق من السجلات بانتظام
+   - اضبط تنبيهات للأحداث المهمة
+
+3. حافظ على تحديث البوت:
+   - تابع التحديثات الأمنية
+   - حدّث المكتبات بانتظام
+
+## الدعم
+
+إذا واجهت أي مشاكل:
+1. تحقق من السجلات
+2. راجع هذا الدليل
+3. تأكد من صحة الإعدادات
+4. تواصل مع فريق الدعم
+
+## تحديث البوت
+
+1. احصل على آخر التحديثات:
 ```bash
-# Reload Nginx configuration
-sudo systemctl reload nginx
-
-# Verify Nginx is running
-sudo systemctl status nginx
+git pull origin main
 ```
 
-4. Verify all services:
+2. حدّث المتطلبات:
 ```bash
-# Check bot logs
-sudo journalctl -u arablife-bot -f
-
-# Check API logs
-sudo journalctl -u arablife-dashboard-api -f
+pip install -r requirements.txt
 ```
 
-## Step 8: Initial Bot Setup
+3. راجع التغييرات في `.env.example`
 
-After the bot is running, you need to configure some channels:
-
-1. Set up welcome channel:
-   - Create a text channel for welcome messages
-   - Use the command: `/setwelcomechannel #your-channel`
-
-2. Configure welcome message:
-   - Upload a background image for welcome messages
-   - Use the command: `/setwelcomebackground [image-url]`
-   - Test with: `/testwelcome`
-
-3. Set up logging channels:
-   - Create channels for role activity and audit logs
-   - Update your .env with the channel IDs:
-     ```env
-     ROLE_ACTIVITY_LOG_CHANNEL_ID=channel_id
-     AUDIT_LOG_CHANNEL_ID=channel_id
-     ```
-
-4. Optional voice setup:
-   - Create a voice channel for welcome sounds
-   - Add to .env:
-     ```env
-     WELCOME_VOICE_CHANNEL_ID=channel_id
-     ```
-
-## Troubleshooting
-
-1. If the bot token is invalid:
-   - Go back to Discord Developer Portal
-   - Reset the token and update .env
-
-2. If permissions are missing:
-   - Check the bot role in your server
-   - Ensure it's placed higher than roles it needs to manage
-   - Verify channel permissions
-
-3. If the bot isn't responding:
-   - Check the logs: `sudo journalctl -u arablife-bot -f`
-   - Verify all IDs in .env are correct
-   - Ensure all required intents are enabled in the Developer Portal
-
-## Security Notes
-
-- Never share your bot token
-- Reset token if accidentally exposed
-- Regularly check audit logs for unauthorized actions
-- Keep bot code and dependencies updated
-- Regularly backup your bot's data
+4. أعد تشغيل البوت

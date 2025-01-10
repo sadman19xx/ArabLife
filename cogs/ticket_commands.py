@@ -1,15 +1,17 @@
 import discord
-from discord.ext import commands
-from discord.ext.commands import Cog
+from discord.ext import commands, tasks
 from discord import app_commands
+from discord.ext.commands import Cog
 import logging
-from config import Config
 import asyncio
-import json
-from datetime import datetime
+import re
+from datetime import datetime, timedelta
+from typing import Optional, Dict, List
+from config import Config
+from utils.database import db
+from utils.logger import LoggerMixin
 import io
-
-logger = logging.getLogger('discord')
+import json
 
 class TicketSelect(discord.ui.Select):
     def __init__(self):
@@ -76,54 +78,76 @@ class StaffView(discord.ui.View):
     async def delete_ticket(self, interaction: discord.Interaction, button: discord.ui.Button):
         await TicketCommands.delete_ticket(interaction)
 
-class TicketCommands(Cog):
-    """Cog for MEE6-like ticket system"""
+
+class TicketCommands(Cog, LoggerMixin):
+    """Cog for ticket system"""
     
     def __init__(self, bot):
         self.bot = bot
-        self.active_tickets = {}  # {channel_id: {"user_id": id, "claimed_by": id}}
-        self.load_tickets()
+        self.active_tickets = {}  # Cache for active tickets
+        self.load_tickets_from_db.start()  # Start background task
 
-    def load_tickets(self):
-        """Load active tickets from JSON file"""
+    def cog_unload(self):
+        """Cleanup when cog is unloaded"""
+        self.load_tickets_from_db.cancel()
+
+    @tasks.loop(minutes=5)
+    async def load_tickets_from_db(self):
+        """Periodically load active tickets from database"""
         try:
-            with open('tickets.json', 'r') as f:
-                self.active_tickets = json.load(f)
-        except FileNotFoundError:
-            self.active_tickets = {}
-
-    def save_tickets(self):
-        """Save active tickets to JSON file"""
-        with open('tickets.json', 'w') as f:
-            json.dump(self.active_tickets, f)
-
-    @app_commands.command(name="setup-tickets")
-    @app_commands.default_permissions(administrator=True)
-    async def setup_tickets(self, interaction: discord.Interaction):
-        """Setup the ticket system with buttons"""
-        try:
-            embed = discord.Embed(
-                title="فريق الدعم في خدمتك",
-                description=(
-                    "الرجاء الضغط على أحد الخيارات المناسبة لمشكلتك\n\n"
-                    "👊 **تذكرة رفعة (شكوى على لاعب)**\n"
-                    "عدم التقيد بالقوانين والشغب في افساد متعة اللعب وتخلك الحدود\n\n"
-                    "🏥 **تذكرة لوزارة الصحة**\n"
-                    "عدم اتباع البروتوكول لوزارة الصحة و وجود احتجاز واضح بالقانون\n\n"
-                    "👮 **تذكرة لوزارة الداخلية**\n"
-                    "عدم اتباع البروتوكول لوزارة الداخلية وتطلع على احد منسوبيها\n\n"
-                    "📝 **ملاحظات واقتراحات**\n"
-                    "رايك مهم في تطوير السيرفر"
-                ),
-                color=discord.Color.blue()
-            )
-            
-            await interaction.channel.send(embed=embed, view=TicketView())
-            await interaction.response.send_message("*تم إعداد نظام التذاكر بنجاح.*", ephemeral=True)
-            
+            async with db.transaction() as cursor:
+                await cursor.execute("""
+                    SELECT channel_id, user_id, claimed_by, ticket_type, created_at
+                    FROM tickets
+                    WHERE status = 'open'
+                """)
+                tickets = await cursor.fetchall()
+                
+                self.active_tickets = {
+                    str(ticket[0]): {
+                        "user_id": str(ticket[1]),
+                        "claimed_by": str(ticket[2]) if ticket[2] else None,
+                        "ticket_type": ticket[3],
+                        "created_at": ticket[4]
+                    }
+                    for ticket in tickets
+                }
         except Exception as e:
-            logger.error(f"Error setting up ticket system: {str(e)}")
-            await interaction.response.send_message("*حدث خطأ أثناء إعداد نظام التذاكر.*", ephemeral=True)
+            self.log.error(f"Error loading tickets from database: {e}")
+
+    @load_tickets_from_db.before_loop
+    async def before_load_tickets(self):
+        """Wait for bot to be ready before starting task"""
+        await self.bot.wait_until_ready()
+
+    async def get_ticket_types(self) -> Dict[str, Dict]:
+        """Get ticket type configurations"""
+        return {
+            "player_report": {
+                "name": "شكوى-على-لاعب",
+                "emoji": "👊",
+                "color": discord.Color.red(),
+                "role_id": Config.PLAYER_REPORT_ROLE_ID
+            },
+            "health": {
+                "name": "وزارة-الصحة",
+                "emoji": "🏥",
+                "color": discord.Color.green(),
+                "role_id": Config.HEALTH_DEPT_ROLE_ID
+            },
+            "interior": {
+                "name": "وزارة-الداخلية",
+                "emoji": "👮",
+                "color": discord.Color.blue(),
+                "role_id": Config.INTERIOR_DEPT_ROLE_ID
+            },
+            "feedback": {
+                "name": "اقتراح",
+                "emoji": "📝",
+                "color": discord.Color.gold(),
+                "role_id": Config.FEEDBACK_ROLE_ID
+            }
+        }
 
     @staticmethod
     async def create_ticket(interaction: discord.Interaction, ticket_type: str):
@@ -131,8 +155,14 @@ class TicketCommands(Cog):
         cog = interaction.client.get_cog("TicketCommands")
         
         # Check if user has an active ticket
-        for ticket_data in cog.active_tickets.values():
-            if ticket_data["user_id"] == interaction.user.id:
+        async with db.transaction() as cursor:
+            await cursor.execute("""
+                SELECT COUNT(*) FROM tickets
+                WHERE user_id = ? AND status = 'open'
+            """, (str(interaction.user.id),))
+            active_tickets = (await cursor.fetchone())[0]
+            
+            if active_tickets > 0:
                 await interaction.followup.send(
                     "*لديك تذكرة نشطة بالفعل.*",
                     ephemeral=True
@@ -140,34 +170,7 @@ class TicketCommands(Cog):
                 return
 
         try:
-            # Get ticket type details
-            ticket_types = {
-                "player_report": {
-                    "name": "شكوى-على-لاعب",
-                    "emoji": "👊",
-                    "color": discord.Color.red(),
-                    "role_id": Config.PLAYER_REPORT_ROLE_ID
-                },
-                "health": {
-                    "name": "وزارة-الصحة",
-                    "emoji": "🏥",
-                    "color": discord.Color.green(),
-                    "role_id": Config.HEALTH_DEPT_ROLE_ID
-                },
-                "interior": {
-                    "name": "وزارة-الداخلية",
-                    "emoji": "👮",
-                    "color": discord.Color.blue(),
-                    "role_id": Config.INTERIOR_DEPT_ROLE_ID
-                },
-                "feedback": {
-                    "name": "اقتراح",
-                    "emoji": "📝",
-                    "color": discord.Color.gold(),
-                    "role_id": Config.FEEDBACK_ROLE_ID
-                }
-            }
-            
+            ticket_types = await cog.get_ticket_types()
             ticket_info = ticket_types.get(ticket_type)
             if not ticket_info:
                 await interaction.followup.send("*نوع تذكرة غير صالح.*", ephemeral=True)
@@ -194,30 +197,34 @@ class TicketCommands(Cog):
                 category=category
             )
             
-            # Store ticket info
-            cog.active_tickets[ticket_channel.id] = {
-                "user_id": interaction.user.id,
+            # Store ticket in database
+            async with db.transaction() as cursor:
+                await cursor.execute("""
+                    INSERT INTO tickets (
+                        channel_id, user_id, ticket_type, status, created_at
+                    ) VALUES (?, ?, ?, 'open', CURRENT_TIMESTAMP)
+                    RETURNING id
+                """, (str(ticket_channel.id), str(interaction.user.id), ticket_type))
+                ticket_id = (await cursor.fetchone())[0]
+            
+            # Update cache
+            cog.active_tickets[str(ticket_channel.id)] = {
+                "user_id": str(interaction.user.id),
                 "claimed_by": None,
-                "created_at": datetime.now().isoformat(),
-                "ticket_type": ticket_type
+                "ticket_type": ticket_type,
+                "created_at": datetime.now().isoformat()
             }
-            cog.save_tickets()
 
-            # Get department role and ticket number
+            # Get department role and create welcome embed
             dept_role = interaction.guild.get_role(ticket_info['role_id'])
             dept_mention = dept_role.mention if dept_role else "فريق الدعم"
-            ticket_number = len(cog.active_tickets) + 1
             
-            # Create welcome embed
             embed = discord.Embed(color=ticket_info['color'])
-            
-            # Set author with ticket info
             embed.set_author(
-                name=f"تذكرة جديدة • #{ticket_number}",
+                name=f"تذكرة جديدة • #{ticket_id}",
                 icon_url=interaction.guild.icon.url if interaction.guild.icon else None
             )
             
-            # Add ticket information fields
             embed.add_field(
                 name="صاحب التذكرة",
                 value=interaction.user.mention,
@@ -234,14 +241,12 @@ class TicketCommands(Cog):
                 inline=True
             )
             
-            # Add response time field
             embed.add_field(
                 name="وقت الرد المتوقع",
                 value="خلال 24 ساعة",
                 inline=False
             )
             
-            # Add instructions
             embed.add_field(
                 name="تعليمات",
                 value=(
@@ -252,14 +257,12 @@ class TicketCommands(Cog):
                 inline=False
             )
             
-            # Set footer with timestamp
             embed.set_footer(
                 text=interaction.guild.name,
                 icon_url=interaction.guild.icon.url if interaction.guild.icon else None
             )
             embed.timestamp = datetime.now()
             
-            # Send message with department mention
             await ticket_channel.send(
                 f"{dept_mention}\n" + 
                 f"مرحباً {interaction.user.mention}، سيتم الرد على تذكرتك في أقرب وقت ممكن.",
@@ -267,7 +270,6 @@ class TicketCommands(Cog):
                 view=StaffView()
             )
             
-            # Send confirmation
             await interaction.followup.send(
                 f"*تم إنشاء تذكرتك في {ticket_channel.mention}*",
                 ephemeral=True
@@ -282,7 +284,7 @@ class TicketCommands(Cog):
                     )
 
         except Exception as e:
-            logger.error(f"Error creating ticket: {str(e)}")
+            cog.log.error(f"Error creating ticket: {e}")
             await interaction.followup.send("*حدث خطأ أثناء إنشاء التذكرة.*", ephemeral=True)
 
     @staticmethod
@@ -294,7 +296,7 @@ class TicketCommands(Cog):
             await interaction.response.send_message("*هذه ليست قناة تذكرة.*", ephemeral=True)
             return
 
-        ticket_data = cog.active_tickets[interaction.channel.id]
+        ticket_data = cog.active_tickets[str(interaction.channel.id)]
         
         # Check if user has staff role
         if not interaction.user.get_role(Config.TICKET_STAFF_ROLE_ID):
@@ -303,7 +305,7 @@ class TicketCommands(Cog):
 
         # Check if ticket is already claimed
         if ticket_data["claimed_by"]:
-            claimer = interaction.guild.get_member(ticket_data["claimed_by"])
+            claimer = interaction.guild.get_member(int(ticket_data["claimed_by"]))
             await interaction.response.send_message(
                 f"*هذه التذكرة تم المطالبة بها من قبل {claimer.mention}*",
                 ephemeral=True
@@ -311,9 +313,16 @@ class TicketCommands(Cog):
             return
 
         try:
-            # Update ticket data
-            ticket_data["claimed_by"] = interaction.user.id
-            cog.save_tickets()
+            # Update database
+            async with db.transaction() as cursor:
+                await cursor.execute("""
+                    UPDATE tickets 
+                    SET claimed_by = ?, claimed_at = CURRENT_TIMESTAMP
+                    WHERE channel_id = ?
+                """, (str(interaction.user.id), str(interaction.channel.id)))
+            
+            # Update cache
+            ticket_data["claimed_by"] = str(interaction.user.id)
 
             # Send confirmation
             embed = discord.Embed(
@@ -326,56 +335,59 @@ class TicketCommands(Cog):
             if hasattr(Config, 'TICKET_LOG_CHANNEL_ID'):
                 log_channel = interaction.guild.get_channel(Config.TICKET_LOG_CHANNEL_ID)
                 if log_channel:
-                    await log_channel.send(f"✋ تم المطالبة بالتذكرة {interaction.channel.mention} من قبل {interaction.user.mention}")
-
-        except Exception as e:
-            logger.error(f"Error claiming ticket: {str(e)}")
-            await interaction.response.send_message("*حدث خطأ أثناء المطالبة بالتذكرة.*", ephemeral=True)
-
-    @staticmethod
-    async def save_transcript(interaction: discord.Interaction):
-        """Save ticket transcript"""
-        try:
-            messages = []
-            async for message in interaction.channel.history(limit=None, oldest_first=True):
-                timestamp = message.created_at.strftime("%Y-%m-%d %H:%M:%S")
-                messages.append(f"[{timestamp}] {message.author}: {message.content}")
-
-            transcript = "\n".join(messages)
-            
-            # Create file
-            file = discord.File(
-                io.StringIO(transcript),
-                filename=f"transcript-{interaction.channel.name}.txt"
-            )
-
-            # Send to log channel
-            if hasattr(Config, 'TICKET_LOG_CHANNEL_ID'):
-                log_channel = interaction.guild.get_channel(Config.TICKET_LOG_CHANNEL_ID)
-                if log_channel:
                     await log_channel.send(
-                        f"📑 Transcript for {interaction.channel.mention}",
-                        file=file
+                        f"✋ تم المطالبة بالتذكرة {interaction.channel.mention} من قبل {interaction.user.mention}"
                     )
 
-            await interaction.response.send_message("*تم حفظ نسخة من المحادثة.*", ephemeral=True)
-
         except Exception as e:
-            logger.error(f"Error saving transcript: {str(e)}")
-            await interaction.response.send_message("*حدث خطأ أثناء حفظ نسخة المحادثة.*", ephemeral=True)
+            cog.log.error(f"Error claiming ticket: {e}")
+            await interaction.response.send_message(
+                "*حدث خطأ أثناء المطالبة بالتذكرة.*",
+                ephemeral=True
+            )
 
     @staticmethod
     async def close_ticket(interaction: discord.Interaction):
         """Close a ticket"""
         cog = interaction.client.get_cog("TicketCommands")
         
-        if not interaction.channel.id in cog.active_tickets:
+        if str(interaction.channel.id) not in cog.active_tickets:
             await interaction.response.send_message("*هذه ليست قناة تذكرة.*", ephemeral=True)
             return
 
         try:
-            # Save transcript first
-            await TicketCommands.save_transcript(interaction)
+            # Save transcript
+            messages = []
+            async for message in interaction.channel.history(limit=None, oldest_first=True):
+                timestamp = message.created_at.strftime("%Y-%m-%d %H:%M:%S")
+                content = message.content or "[No content]"
+                for embed in message.embeds:
+                    content += f"\n[Embed: {embed.title or 'No title'}]"
+                for attachment in message.attachments:
+                    content += f"\n[Attachment: {attachment.filename}]"
+                messages.append(f"[{timestamp}] {message.author}: {content}")
+
+            transcript = "\n".join(messages)
+            transcript_file = discord.File(
+                io.StringIO(transcript),
+                filename=f"transcript-{interaction.channel.name}.txt"
+            )
+
+            # Update database
+            async with db.transaction() as cursor:
+                await cursor.execute("""
+                    UPDATE tickets 
+                    SET status = 'closed', closed_at = CURRENT_TIMESTAMP, 
+                        closed_by = ?, transcript = ?
+                    WHERE channel_id = ?
+                """, (
+                    str(interaction.user.id),
+                    transcript,
+                    str(interaction.channel.id)
+                ))
+
+            # Remove from cache
+            del cog.active_tickets[str(interaction.channel.id)]
 
             # Send closing message
             embed = discord.Embed(
@@ -383,35 +395,57 @@ class TicketCommands(Cog):
                 description="سيتم حذف هذه القناة خلال 5 ثواني...",
                 color=discord.Color.red()
             )
-            await interaction.channel.send(embed=embed)
+            await interaction.response.send_message(embed=embed)
             
-            # Log closure
+            # Log closure and transcript
             if hasattr(Config, 'TICKET_LOG_CHANNEL_ID'):
                 log_channel = interaction.guild.get_channel(Config.TICKET_LOG_CHANNEL_ID)
                 if log_channel:
-                    await log_channel.send(f"🔒 تم إغلاق التذكرة {interaction.channel.name} من قبل {interaction.user.mention}")
-
-            # Remove from active tickets
-            del cog.active_tickets[interaction.channel.id]
-            cog.save_tickets()
+                    await log_channel.send(
+                        f"🔒 تم إغلاق التذكرة {interaction.channel.name} من قبل {interaction.user.mention}",
+                        file=transcript_file
+                    )
             
             # Wait and delete channel
             await asyncio.sleep(5)
             await interaction.channel.delete()
 
         except Exception as e:
-            logger.error(f"Error closing ticket: {str(e)}")
-            await interaction.response.send_message("*حدث خطأ أثناء إغلاق التذكرة.*", ephemeral=True)
+            cog.log.error(f"Error closing ticket: {e}")
+            await interaction.followup.send(
+                "*حدث خطأ أثناء إغلاق التذكرة.*",
+                ephemeral=True
+            )
 
     @staticmethod
     async def reopen_ticket(interaction: discord.Interaction):
         """Reopen a closed ticket"""
+        cog = interaction.client.get_cog("TicketCommands")
+        
         try:
-            # Update channel permissions
-            await interaction.channel.set_permissions(interaction.guild.default_role, read_messages=False)
-            ticket_user = await interaction.guild.fetch_member(interaction.client.get_cog("TicketCommands").active_tickets[interaction.channel.id]["user_id"])
+            # Update database
+            async with db.transaction() as cursor:
+                await cursor.execute("""
+                    UPDATE tickets 
+                    SET status = 'open', reopened_at = CURRENT_TIMESTAMP,
+                        reopened_by = ?
+                    WHERE channel_id = ?
+                """, (str(interaction.user.id), str(interaction.channel.id)))
+            
+            # Update permissions
+            await interaction.channel.set_permissions(
+                interaction.guild.default_role,
+                read_messages=False
+            )
+            ticket_user = await interaction.guild.fetch_member(
+                int(cog.active_tickets[str(interaction.channel.id)]["user_id"])
+            )
             if ticket_user:
-                await interaction.channel.set_permissions(ticket_user, read_messages=True, send_messages=True)
+                await interaction.channel.set_permissions(
+                    ticket_user,
+                    read_messages=True,
+                    send_messages=True
+                )
             
             embed = discord.Embed(
                 description=f"تم إعادة فتح التذكرة من قبل {interaction.user.mention}",
@@ -423,34 +457,273 @@ class TicketCommands(Cog):
             if hasattr(Config, 'TICKET_LOG_CHANNEL_ID'):
                 log_channel = interaction.guild.get_channel(Config.TICKET_LOG_CHANNEL_ID)
                 if log_channel:
-                    await log_channel.send(f"🔓 تم إعادة فتح التذكرة {interaction.channel.mention} من قبل {interaction.user.mention}")
+                    await log_channel.send(
+                        f"🔓 تم إعادة فتح التذكرة {interaction.channel.mention} من قبل {interaction.user.mention}"
+                    )
 
         except Exception as e:
-            logger.error(f"Error reopening ticket: {str(e)}")
-            await interaction.response.send_message("*حدث خطأ أثناء إعادة فتح التذكرة.*", ephemeral=True)
+            cog.log.error(f"Error reopening ticket: {e}")
+            await interaction.response.send_message(
+                "*حدث خطأ أثناء إعادة فتح التذكرة.*",
+                ephemeral=True
+            )
 
     @staticmethod
     async def delete_ticket(interaction: discord.Interaction):
         """Delete a ticket immediately"""
+        cog = interaction.client.get_cog("TicketCommands")
+        
+        if str(interaction.channel.id) not in cog.active_tickets:
+            await interaction.response.send_message("*هذه ليست قناة تذكرة.*", ephemeral=True)
+            return
+
         try:
             # Save transcript first
-            await TicketCommands.save_transcript(interaction)
+            messages = []
+            async for message in interaction.channel.history(limit=None, oldest_first=True):
+                timestamp = message.created_at.strftime("%Y-%m-%d %H:%M:%S")
+                content = message.content or "[No content]"
+                for embed in message.embeds:
+                    content += f"\n[Embed: {embed.title or 'No title'}]"
+                for attachment in message.attachments:
+                    content += f"\n[Attachment: {attachment.filename}]"
+                messages.append(f"[{timestamp}] {message.author}: {content}")
+
+            transcript = "\n".join(messages)
+            transcript_file = discord.File(
+                io.StringIO(transcript),
+                filename=f"transcript-{interaction.channel.name}.txt"
+            )
             
-            # Log deletion
+            # Update database
+            async with db.transaction() as cursor:
+                await cursor.execute("""
+                    UPDATE tickets 
+                    SET status = 'deleted', deleted_at = CURRENT_TIMESTAMP,
+                        deleted_by = ?, transcript = ?
+                    WHERE channel_id = ?
+                """, (
+                    str(interaction.user.id),
+                    transcript,
+                    str(interaction.channel.id)
+                ))
+            
+            # Remove from cache
+            del cog.active_tickets[str(interaction.channel.id)]
+            
+            # Log deletion and transcript
             if hasattr(Config, 'TICKET_LOG_CHANNEL_ID'):
                 log_channel = interaction.guild.get_channel(Config.TICKET_LOG_CHANNEL_ID)
                 if log_channel:
-                    await log_channel.send(f"🗑️ تم حذف التذكرة {interaction.channel.name} من قبل {interaction.user.mention}")
+                    await log_channel.send(
+                        f"🗑️ تم حذف التذكرة {interaction.channel.name} من قبل {interaction.user.mention}",
+                        file=transcript_file
+                    )
 
-            # Remove from active tickets
-            interaction.client.get_cog("TicketCommands").active_tickets.pop(interaction.channel.id, None)
-            
             # Delete channel immediately
             await interaction.channel.delete()
 
         except Exception as e:
-            logger.error(f"Error deleting ticket: {str(e)}")
-            await interaction.response.send_message("*حدث خطأ أثناء حذف التذكرة.*", ephemeral=True)
+            cog.log.error(f"Error deleting ticket: {e}")
+            await interaction.followup.send(
+                "*حدث خطأ أثناء حذف التذكرة.*",
+                ephemeral=True
+            )
+
+    @app_commands.command(
+        name="setup-tickets",
+        description="Setup the ticket system"
+    )
+    @app_commands.checks.has_permissions(administrator=True)
+    async def setup_tickets(self, interaction: discord.Interaction):
+        """Setup the ticket system with buttons"""
+        try:
+            embed = discord.Embed(
+                title="فريق الدعم في خدمتك",
+                description=(
+                    "الرجاء الضغط على أحد الخيارات المناسبة لمشكلتك\n\n"
+                    "👊 **تذكرة رفعة (شكوى على لاعب)**\n"
+                    "عدم التقيد بالقوانين والشغب في افساد متعة اللعب وتخلك الحدود\n\n"
+                    "🏥 **تذكرة لوزارة الصحة**\n"
+                    "عدم اتباع البروتوكول لوزارة الصحة و وجود احتجاز واضح بالقانون\n\n"
+                    "👮 **تذكرة لوزارة الداخلية**\n"
+                    "عدم اتباع البروتوكول لوزارة الداخلية وتطلع على احد منسوبيها\n\n"
+                    "📝 **ملاحظات واقتراحات**\n"
+                    "رايك مهم في تطوير السيرفر"
+                ),
+                color=discord.Color.blue()
+            )
+            
+            await interaction.channel.send(embed=embed, view=TicketView())
+            await interaction.response.send_message("*تم إعداد نظام التذاكر بنجاح.*", ephemeral=True)
+            
+        except Exception as e:
+            self.log.error(f"Error setting up ticket system: {e}")
+            await interaction.response.send_message("*حدث خطأ أثناء إعداد نظام التذاكر.*", ephemeral=True)
+
+    @app_commands.command(
+        name="ticket-stats",
+        description="Show ticket statistics"
+    )
+    @app_commands.checks.has_permissions(administrator=True)
+    async def ticket_stats(self, interaction: discord.Interaction):
+        """Show ticket statistics"""
+        try:
+            async with db.transaction() as cursor:
+                # Get total tickets
+                await cursor.execute("SELECT COUNT(*) FROM tickets")
+                total_tickets = (await cursor.fetchone())[0]
+                
+                # Get open tickets
+                await cursor.execute("SELECT COUNT(*) FROM tickets WHERE status = 'open'")
+                open_tickets = (await cursor.fetchone())[0]
+                
+                # Get tickets by type
+                await cursor.execute("""
+                    SELECT ticket_type, COUNT(*) 
+                    FROM tickets 
+                    GROUP BY ticket_type
+                """)
+                type_stats = await cursor.fetchall()
+                
+                # Get average response time
+                await cursor.execute("""
+                    SELECT AVG(JULIANDAY(closed_at) - JULIANDAY(created_at)) * 24
+                    FROM tickets 
+                    WHERE status = 'closed'
+                """)
+                avg_response = (await cursor.fetchone())[0]
+                
+            embed = discord.Embed(
+                title="📊 إحصائيات التذاكر",
+                color=discord.Color.blue()
+            )
+            
+            embed.add_field(
+                name="إجمالي التذاكر",
+                value=str(total_tickets),
+                inline=True
+            )
+            embed.add_field(
+                name="التذاكر المفتوحة",
+                value=str(open_tickets),
+                inline=True
+            )
+            
+            if avg_response:
+                embed.add_field(
+                    name="متوسط وقت الرد",
+                    value=f"{avg_response:.1f} ساعات",
+                    inline=True
+                )
+            
+            # Add type statistics
+            ticket_types = await self.get_ticket_types()
+            for ticket_type, count in type_stats:
+                type_info = ticket_types.get(ticket_type, {})
+                embed.add_field(
+                    name=f"{type_info.get('emoji', '❓')} {type_info.get('name', ticket_type)}",
+                    value=str(count),
+                    inline=True
+                )
+            
+            await interaction.response.send_message(embed=embed)
+            
+        except Exception as e:
+            self.log.error(f"Error getting ticket stats: {e}")
+            await interaction.response.send_message(
+                "*حدث خطأ أثناء جلب إحصائيات التذاكر.*",
+                ephemeral=True
+            )
+
+    @app_commands.command(
+        name="ticket-search",
+        description="Search for tickets"
+    )
+    @app_commands.checks.has_permissions(administrator=True)
+    async def ticket_search(
+        self,
+        interaction: discord.Interaction,
+        user: Optional[discord.Member] = None,
+        ticket_type: Optional[str] = None,
+        status: Optional[str] = None
+    ):
+        """Search for tickets with filters"""
+        try:
+            query = "SELECT * FROM tickets WHERE 1=1"
+            params = []
+            
+            if user:
+                query += " AND user_id = ?"
+                params.append(str(user.id))
+            
+            if ticket_type:
+                query += " AND ticket_type = ?"
+                params.append(ticket_type)
+                
+            if status:
+                query += " AND status = ?"
+                params.append(status)
+                
+            query += " ORDER BY created_at DESC LIMIT 10"
+            
+            async with db.transaction() as cursor:
+                await cursor.execute(query, params)
+                tickets = await cursor.fetchall()
+                
+            if not tickets:
+                await interaction.response.send_message(
+                    "*لم يتم العثور على تذاكر.*",
+                    ephemeral=True
+                )
+                return
+                
+            embed = discord.Embed(
+                title="🔍 نتائج البحث",
+                color=discord.Color.blue()
+            )
+            
+            ticket_types = await self.get_ticket_types()
+            
+            for ticket in tickets:
+                type_info = ticket_types.get(ticket['ticket_type'], {})
+                embed.add_field(
+                    name=f"{type_info.get('emoji', '❓')} تذكرة #{ticket['id']}",
+                    value=(
+                        f"المستخدم: <@{ticket['user_id']}>\n"
+                        f"الحالة: {ticket['status']}\n"
+                        f"التاريخ: {ticket['created_at']}"
+                    ),
+                    inline=False
+                )
+                
+            await interaction.response.send_message(embed=embed)
+            
+        except Exception as e:
+            self.log.error(f"Error searching tickets: {e}")
+            await interaction.response.send_message(
+                "*حدث خطأ أثناء البحث عن التذاكر.*",
+                ephemeral=True
+            )
 
 async def setup(bot):
-    await bot.add_cog(TicketCommands(bot))
+    """Setup function for loading the cog"""
+    # Create cog instance
+    cog = TicketCommands(bot)
+    
+    # Add cog to bot
+    await bot.add_cog(cog)
+    
+    try:
+        # Register app commands to guild
+        guild = discord.Object(id=Config.GUILD_ID)
+        commands = [
+            cog.setup_tickets,
+            cog.ticket_stats,
+            cog.ticket_search
+        ]
+        for cmd in commands:
+            bot.tree.add_command(cmd, guild=guild)
+        print("Registered ticket commands to guild")
+    except Exception as e:
+        print(f"Failed to register ticket commands: {e}")

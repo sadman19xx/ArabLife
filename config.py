@@ -18,6 +18,7 @@ class Config:
     # Channel IDs
     ROLE_ACTIVITY_LOG_CHANNEL_ID = int(os.getenv('ROLE_ACTIVITY_LOG_CHANNEL_ID'))
     AUDIT_LOG_CHANNEL_ID = int(os.getenv('AUDIT_LOG_CHANNEL_ID'))
+    ERROR_LOG_CHANNEL_ID = int(os.getenv('ERROR_LOG_CHANNEL_ID', '0'))
     WELCOME_VOICE_CHANNEL_ID = int(os.getenv('WELCOME_VOICE_CHANNEL_ID', '1309595750878937240'))
     WELCOME_CHANNEL_ID = int(os.getenv('WELCOME_CHANNEL_ID', '0'))
     
@@ -38,6 +39,7 @@ class Config:
     ROLE_COMMAND_COOLDOWN = int(os.getenv('ROLE_COMMAND_COOLDOWN', '5'))
     STATUS_COMMAND_COOLDOWN = int(os.getenv('STATUS_COMMAND_COOLDOWN', '10'))
     SOUND_COMMAND_COOLDOWN = int(os.getenv('SOUND_COMMAND_COOLDOWN', '5'))
+    TICKET_COMMAND_COOLDOWN = int(os.getenv('TICKET_COMMAND_COOLDOWN', '30'))
     
     # Security settings
     MAX_STATUS_LENGTH = int(os.getenv('MAX_STATUS_LENGTH', '100'))
@@ -48,6 +50,11 @@ class Config:
     ALLOWED_DOMAINS = os.getenv('ALLOWED_DOMAINS', 'discord.com,discord.gg').split(',')
     SPAM_DETECTION = os.getenv('SPAM_DETECTION', 'true').lower() == 'true'
     AUTO_TIMEOUT_DURATION = int(os.getenv('AUTO_TIMEOUT_DURATION', '3600'))  # seconds
+    WARNING_THRESHOLD = int(os.getenv('WARNING_THRESHOLD', '3'))
+    WARNING_ACTION = os.getenv('WARNING_ACTION', 'timeout')  # timeout, kick, ban
+    WARNING_DURATION = int(os.getenv('WARNING_DURATION', '3600'))  # seconds
+    WARNING_EXPIRE_DAYS = int(os.getenv('WARNING_EXPIRE_DAYS', '30'))  # days until warnings expire
+    EXEMPT_ROLES = list(map(int, os.getenv('EXEMPT_ROLES', '').split(',')))  # Roles exempt from security checks
     
     # AutoMod settings
     AUTOMOD_ENABLED = os.getenv('AUTOMOD_ENABLED', 'true').lower() == 'true'
@@ -56,6 +63,8 @@ class Config:
     AUTOMOD_RAID_THRESHOLD = int(os.getenv('AUTOMOD_RAID_THRESHOLD', '10'))
     AUTOMOD_RAID_INTERVAL = int(os.getenv('AUTOMOD_RAID_INTERVAL', '30'))
     AUTOMOD_ACTION = os.getenv('AUTOMOD_ACTION', 'warn')  # warn, mute, kick, ban
+    AUTOMOD_IGNORED_CHANNELS = list(map(int, os.getenv('AUTOMOD_IGNORED_CHANNELS', '').split(',')))
+    AUTOMOD_IGNORED_ROLES = list(map(int, os.getenv('AUTOMOD_IGNORED_ROLES', '').split(',')))
     
     # Leveling settings
     LEVELING_ENABLED = os.getenv('LEVELING_ENABLED', 'true').lower() == 'true'
@@ -64,6 +73,8 @@ class Config:
     LEVEL_UP_CHANNEL_ID = os.getenv('LEVEL_UP_CHANNEL_ID')
     LEVEL_UP_MESSAGE = os.getenv('LEVEL_UP_MESSAGE', 'Congratulations {user}! You reached level {level}!')
     ROLE_REWARDS = os.getenv('ROLE_REWARDS', '[]')  # JSON string of {level: role_id} pairs
+    CHANNEL_MULTIPLIERS = os.getenv('CHANNEL_MULTIPLIERS', '{}')  # JSON string of {channel_id: multiplier}
+    ROLE_MULTIPLIERS = os.getenv('ROLE_MULTIPLIERS', '{}')  # JSON string of {role_id: multiplier}
     
     # Visa settings
     VISA_IMAGE_URL = os.getenv('VISA_IMAGE_URL', 'https://i.imgur.com/your_image_id.png')
@@ -72,12 +83,25 @@ class Config:
     TICKET_STAFF_ROLE_ID = int(os.getenv('TICKET_STAFF_ROLE_ID', '0'))  # Role that can see tickets
     TICKET_CATEGORY_ID = int(os.getenv('TICKET_CATEGORY_ID', '0'))  # Category to create tickets in
     TICKET_LOG_CHANNEL_ID = int(os.getenv('TICKET_LOG_CHANNEL_ID', '0'))  # Channel to log ticket actions
+    TICKET_ARCHIVE_DAYS = int(os.getenv('TICKET_ARCHIVE_DAYS', '30'))  # Days to keep closed tickets
+    TICKET_CLOSE_DELAY = int(os.getenv('TICKET_CLOSE_DELAY', '5'))  # Seconds to wait before deleting closed ticket
+    TICKET_RATE_LIMIT = int(os.getenv('TICKET_RATE_LIMIT', '1'))  # Maximum open tickets per user
+    TICKET_AUTO_CLOSE_HOURS = int(os.getenv('TICKET_AUTO_CLOSE_HOURS', '72'))  # Hours until inactive tickets auto-close
     
     # Department Role IDs
     PLAYER_REPORT_ROLE_ID = int(os.getenv('PLAYER_REPORT_ROLE_ID', '0'))  # Staff for player reports
     HEALTH_DEPT_ROLE_ID = int(os.getenv('HEALTH_DEPT_ROLE_ID', '0'))  # Health department staff
     INTERIOR_DEPT_ROLE_ID = int(os.getenv('INTERIOR_DEPT_ROLE_ID', '0'))  # Interior department staff
     FEEDBACK_ROLE_ID = int(os.getenv('FEEDBACK_ROLE_ID', '0'))  # Staff for feedback/suggestions
+    
+    # Logging settings
+    LOG_LEVEL = os.getenv('LOG_LEVEL', 'INFO')
+    LOG_FILE_PATH = os.getenv('LOG_FILE_PATH', 'logs/bot.log')
+    LOG_FORMAT = os.getenv('LOG_FORMAT', '%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+    LOG_MAX_BYTES = int(os.getenv('LOG_MAX_BYTES', '10485760'))  # 10MB
+    LOG_BACKUP_COUNT = int(os.getenv('LOG_BACKUP_COUNT', '5'))
+    LOG_TO_CONSOLE = os.getenv('LOG_TO_CONSOLE', 'true').lower() == 'true'
+    LOG_TO_FILE = os.getenv('LOG_TO_FILE', 'true').lower() == 'true'
     
     @classmethod
     def validate_config(cls):
@@ -125,3 +149,9 @@ class Config:
                 raise ValueError("Ticket category ID must be set if using ticket system")
             if cls.TICKET_LOG_CHANNEL_ID == 0:
                 raise ValueError("Ticket log channel ID must be set if using ticket system")
+            
+        # Create logs directory if logging to file
+        if cls.LOG_TO_FILE:
+            log_dir = os.path.dirname(cls.LOG_FILE_PATH)
+            if log_dir:
+                os.makedirs(log_dir, exist_ok=True)
