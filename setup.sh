@@ -10,7 +10,29 @@ sudo apt update
 
 # Install system dependencies
 echo "Installing system dependencies..."
+sudo apt update
 sudo apt install -y python3 python3-pip python3-venv ffmpeg
+
+# Verify FFmpeg installation
+if ! command -v ffmpeg &> /dev/null; then
+    echo "❌ FFmpeg installation failed"
+    echo "Trying alternative installation method..."
+    sudo apt install -y software-properties-common
+    sudo add-apt-repository ppa:mc3man/trusty-media
+    sudo apt update
+    sudo apt install -y ffmpeg
+    if ! command -v ffmpeg &> /dev/null; then
+        echo "❌ FFmpeg installation failed. Please install manually."
+        exit 1
+    fi
+fi
+echo "✅ FFmpeg installed successfully"
+
+# Set correct FFmpeg path in .env
+if [ -f .env ]; then
+    sed -i 's|^FFMPEG_PATH=.*|FFMPEG_PATH=/usr/bin/ffmpeg|' .env
+    echo "✅ Updated FFmpeg path in .env"
+fi
 
 # Create virtual environment
 echo "Creating Python virtual environment..."

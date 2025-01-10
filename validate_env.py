@@ -57,6 +57,15 @@ def validate_env():
     else:
         print("✅ Bot token format is valid")
     
+    # Check FFmpeg installation
+    ffmpeg_path = os.getenv('FFMPEG_PATH', '/usr/bin/ffmpeg')
+    if not os.path.isfile(ffmpeg_path):
+        print("❌ Error: FFmpeg not found at", ffmpeg_path)
+        print("   Install FFmpeg with: sudo apt install -y ffmpeg")
+        success = False
+    else:
+        print("✅ FFmpeg found at", ffmpeg_path)
+
     # Validate all required IDs
     for var_name in required_ids:
         value = os.getenv(var_name)
