@@ -1,5 +1,6 @@
 import discord
 from discord.ext import commands
+from discord import app_commands
 import logging
 import os
 import asyncio
@@ -19,6 +20,7 @@ intents.voice_states = True  # Required for voice functionality
 
 class ArabLifeBot(commands.Bot):
     """Custom bot class with additional functionality"""
+
     
     def __init__(self):
         # Get prefix from database or use default
@@ -96,6 +98,20 @@ class ArabLifeBot(commands.Bot):
         activity = discord.Activity(type=discord.ActivityType.watching, name="you my love")
         await self.change_presence(activity=activity)
 
+        # Sync commands on startup
+        print("Syncing commands...")
+        try:
+            guild = discord.Object(id=Config.GUILD_ID)
+            # Clear existing commands first
+            self.tree.clear_commands(guild=guild)
+            # Copy global commands to guild
+            self.tree.copy_global_to(guild=guild)
+            # Sync commands
+            await self.tree.sync(guild=guild)
+            print("Successfully synced commands!")
+        except Exception as e:
+            print(f"Failed to sync commands: {str(e)}")
+
         # Initialize database for each guild
         for guild in self.guilds:
             async with aiosqlite.connect(db.db_path) as conn:
@@ -113,19 +129,6 @@ class ArabLifeBot(commands.Bot):
                 
                 await conn.commit()
 
-        # Sync commands for the specific guild
-        try:
-            guild = discord.Object(id=Config.GUILD_ID)
-            self.tree.copy_global_to(guild=guild)  # Copy global commands to guild
-            await self.tree.sync(guild=guild)
-            
-            guild_object = self.get_guild(Config.GUILD_ID)
-            if guild_object:
-                print(f"Successfully synced commands to guild: {guild_object.name}")
-            else:
-                print("Failed to fetch the guild object.")
-        except Exception as e:
-            print(f"Failed to sync commands: {str(e)}")
 
     async def on_command_error(self, ctx, error):
         """Global error handler for command errors"""
@@ -135,6 +138,10 @@ class ArabLifeBot(commands.Bot):
             await ctx.send('*يرجى تقديم جميع المعطيات المطلوبة.*')
         elif isinstance(error, commands.BadArgument):
             await ctx.send('*معطيات غير صالحة.*')
+        elif isinstance(error, app_commands.CommandInvokeError):
+            # Handle app command errors
+            await ctx.send('*حدث خطأ أثناء تنفيذ الأمر. يرجى المحاولة مرة أخرى.*')
+            logging.error(f"App command error: {error}", exc_info=True)
         elif isinstance(error, commands.CommandNotFound):
             # Check for custom command
             if ctx.guild:
@@ -151,6 +158,26 @@ class ArabLifeBot(commands.Bot):
             # Log unexpected errors
             logging.error(f"An unexpected error occurred: {error}", exc_info=True)
             await ctx.send('*حدث خطأ غير متوقع. ارجو التواصل مع إدارة الديسكورد وتقديم تفاصيل الأمر.*')
+
+    async def on_app_command_error(self, interaction: discord.Interaction, error: app_commands.AppCommandError):
+        """Global error handler for application commands"""
+        if isinstance(error, app_commands.CommandOnCooldown):
+            await interaction.response.send_message(
+                f"*يرجى الانتظار {error.retry_after:.2f} ثانية قبل استخدام هذا الأمر مرة أخرى.*",
+                ephemeral=True
+            )
+        elif isinstance(error, app_commands.MissingPermissions):
+            await interaction.response.send_message(
+                "*لا تملك الصلاحية لأستخدام هذه الامر.*",
+                ephemeral=True
+            )
+        else:
+            # Log unexpected errors
+            logging.error(f"App command error: {error}", exc_info=True)
+            await interaction.response.send_message(
+                "*حدث خطأ غير متوقع. يرجى المحاولة مرة أخرى.*",
+                ephemeral=True
+            )
 
 async def main():
     """Main function to run the bot"""

@@ -133,22 +133,74 @@ TOKEN=your_bot_token_here
      WELCOME_CHANNEL_ID=channel_id
      ```
 
-## Step 7: Start the Bot
+## Step 7: Start the Services
 
-1. Install dependencies:
+1. Install dependencies and start the bot:
 ```bash
+# Install bot dependencies
 ./setup.sh
-```
 
-2. Start the bot:
-```bash
+# Start the bot service
 sudo systemctl start arablife-bot
-```
 
-3. Verify the bot is running:
-```bash
+# Verify bot is running
 sudo systemctl status arablife-bot
 ```
+
+2. Start the dashboard API:
+```bash
+# Start the API service
+sudo systemctl start arablife-dashboard-api
+
+# Verify API is running
+sudo systemctl status arablife-dashboard-api
+```
+
+3. Configure and start Nginx:
+```bash
+# Reload Nginx configuration
+sudo systemctl reload nginx
+
+# Verify Nginx is running
+sudo systemctl status nginx
+```
+
+4. Verify all services:
+```bash
+# Check bot logs
+sudo journalctl -u arablife-bot -f
+
+# Check API logs
+sudo journalctl -u arablife-dashboard-api -f
+```
+
+## Step 8: Initial Bot Setup
+
+After the bot is running, you need to configure some channels:
+
+1. Set up welcome channel:
+   - Create a text channel for welcome messages
+   - Use the command: `/setwelcomechannel #your-channel`
+
+2. Configure welcome message:
+   - Upload a background image for welcome messages
+   - Use the command: `/setwelcomebackground [image-url]`
+   - Test with: `/testwelcome`
+
+3. Set up logging channels:
+   - Create channels for role activity and audit logs
+   - Update your .env with the channel IDs:
+     ```env
+     ROLE_ACTIVITY_LOG_CHANNEL_ID=channel_id
+     AUDIT_LOG_CHANNEL_ID=channel_id
+     ```
+
+4. Optional voice setup:
+   - Create a voice channel for welcome sounds
+   - Add to .env:
+     ```env
+     WELCOME_VOICE_CHANNEL_ID=channel_id
+     ```
 
 ## Troubleshooting
 
