@@ -2,13 +2,47 @@
 
 A Discord bot for managing roles, voice channels, tickets, and more.
 
+## Server Setup
+
+Before installing the bot, you need to set up the server:
+
+1. Connect to the server:
+```bash
+ssh root@45.76.83.149
+```
+
+2. Clone the repository:
+```bash
+git clone https://github.com/your-username/ArabLife.git
+cd ArabLife
+```
+
+3. Make scripts executable:
+```bash
+chmod +x setup-server.sh install.sh start.sh dev.sh dashboard/frontend/setup-frontend.sh
+```
+
+4. Run the server setup script:
+```bash
+sudo ./setup-server.sh
+```
+This will:
+- Install system dependencies (Python, Node.js, nginx, etc.)
+- Configure nginx as a reverse proxy
+- Set up proper port forwarding
+
 ## Installation Methods
 
-You can install and manage the bot in two ways:
+After setting up the server, you can install and manage the bot in two ways:
 
 ### Method 1: Web Dashboard (Recommended)
 
-1. Access the dashboard:
+1. Start the development servers:
+```bash
+./dev.sh
+```
+
+2. Access the dashboard:
 ```
 http://45.76.83.149
 ```
@@ -19,39 +53,31 @@ The web interface provides:
 - Start/stop controls
 - Live log viewer
 
-2. Navigate to "Bot Installation" in the sidebar
-3. Fill in the required information:
-   - Bot Token
+3. Navigate to "Bot Installation" in the sidebar
+4. Fill in the required information:
+   - Bot Token (see "Getting Required Information" below)
    - Server ID
    - Role IDs
    - Channel IDs
-4. Click "Install Bot" to set up the bot
-5. Use the control panel to start/stop the bot and view logs
+5. Click "Install Bot" to set up the bot
+6. Use the control panel to start/stop the bot and view logs
 
 ### Method 2: Command Line
 
-1. Connect to the server:
-```bash
-ssh root@45.76.83.149
-```
+If you prefer using the command line:
 
-2. Make the installation script executable:
-```bash
-chmod +x install.sh
-```
-
-3. Run the installation script:
+1. Run the installation script:
 ```bash
 sudo ./install.sh
 ```
 
-4. During installation, you'll be prompted for:
+2. During installation, you'll be prompted for:
    - Discord Bot Token
    - Server ID
    - Role IDs
    - Channel IDs
 
-5. After installation, use these commands to manage the bot:
+3. After installation, use these commands to manage the bot:
 ```bash
 ./start.sh start    # Start the bot
 ./start.sh stop     # Stop the bot
@@ -132,12 +158,7 @@ sudo ./install.sh
 
 To work on the bot's code:
 
-1. Connect to the server:
-```bash
-ssh root@45.76.83.149
-```
-
-2. Start development servers:
+1. Start development servers:
 ```bash
 ./dev.sh
 ```
@@ -147,7 +168,7 @@ This will:
 - Start the React frontend server (http://45.76.83.149)
 - Watch for changes and reload automatically
 
-3. Access the API documentation:
+2. Access the API documentation:
 - OpenAPI docs: http://45.76.83.149:8000/docs
 - ReDoc: http://45.76.83.149:8000/redoc
 
@@ -155,27 +176,47 @@ This will:
 
 If you encounter issues:
 
-1. Check the bot's status:
+1. Check the server setup:
+```bash
+sudo nginx -t              # Test nginx configuration
+sudo systemctl status nginx # Check nginx status
+```
+
+2. Check the bot's status:
 ```bash
 ./start.sh status
 ```
 
-2. View error messages:
+3. View bot logs:
 ```bash
 screen -r arablife
 ```
 
-3. Common Issues:
+4. View development server logs:
+```bash
+# Frontend logs
+cd dashboard/frontend
+npm run start
+
+# Backend logs
+cd dashboard/backend
+uvicorn app.main:app --reload
+```
+
+5. Common Issues:
    - Invalid Token: Reset token in Discord Developer Portal
    - Wrong IDs: Double-check all IDs in .env file
    - Missing Permissions: Ensure bot role is above managed roles
    - Connection Issues: Check server internet connection
+   - Port Issues: Make sure ports 80, 3000, and 8000 are not in use
+   - Nginx Issues: Check /var/log/nginx/error.log
 
-4. Still Having Issues:
+6. Still Having Issues:
    - Check bot console for specific error messages
    - Verify all IDs in .env file
    - Ensure bot has required permissions
    - Verify all dependencies installed correctly
+   - Check nginx configuration in /etc/nginx/sites-available/arablife
 
 ## Security Notes
 
@@ -184,3 +225,5 @@ screen -r arablife
 - Reset token if accidentally exposed
 - Regularly check bot permissions
 - Monitor audit logs for unusual activity
+- Keep the server updated with security patches
+- Use strong SSH keys for server access
