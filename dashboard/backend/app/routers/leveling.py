@@ -1,205 +1,208 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, func
-from typing import List
+from sqlalchemy import select
+from typing import Dict, List
 from ..database import get_db
-from ..models import Leveling, Guild, GuildSettings
-from ..schemas import LevelingSettings, LeaderboardEntry, Response, RoleReward
-from ..auth import get_current_user
+from ..auth import get_current_active_user, verify_guild_permissions
+from ..models import (
+    LevelingSettings as LevelingSettingsModel,
+    UserLevel as UserLevelModel
+)
+from ..schemas import (
+    LevelingSettings,
+    LevelingSettingsCreate,
+    LevelingSettingsUpdate,
+    UserLevel,
+    ErrorResponse
+)
 
-router = APIRouter()
+router = APIRouter(
+    prefix="/api/leveling",
+    tags=["leveling"],
+    responses={401: {"model": ErrorResponse}}
+)
 
 @router.get("/{guild_id}/settings", response_model=LevelingSettings)
 async def get_leveling_settings(
     guild_id: str,
-    db: AsyncSession = Depends(get_db),
-    current_user: dict = Depends(get_current_user)
+    current_user: Dict = Depends(get_current_active_user),
+    db: AsyncSession = Depends(get_db)
 ):
-    """Get leveling settings for a guild"""
-    # Check if guild exists
-    guild_result = await db.execute(
-        select(Guild).where(Guild.discord_id == guild_id)
-    )
-    guild = guild_result.scalar_one_or_none()
-    if not guild:
+    """Get leveling settings for a guild."""
+    try:
+        # Verify user has access to this guild
+        await verify_guild_permissions(guild_id, current_user)
+
+        # Get settings from database
+        query = select(LevelingSettingsModel).where(LevelingSettingsModel.guild_id == guild_id)
+        result = await db.execute(query)
+        settings = result.scalar_one_or_none()
+
+        if not settings:
+            # Create default settings if none exist
+            settings = LevelingSettingsModel(
+                guild_id=guild_id,
+                xp_per_message=1,
+                xp_cooldown=60,
+                level_up_channel_id=None,
+                level_up_message=None,
+                role_rewards={}
+            )
+            db.add(settings)
+            await db.commit()
+            await db.refresh(settings)
+
+        return settings
+
+    except Exception as e:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Guild not found"
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=str(e)
         )
 
-    # Get guild settings
-    settings_result = await db.execute(
-        select(GuildSettings).where(GuildSettings.guild_id == guild.id)
-    )
-    settings = settings_result.scalar_one_or_none()
-    
-    if not settings:
-        settings = GuildSettings(
-            guild_id=guild.id,
-            level_up_channel_id=None,
-            custom_settings={
-                "leveling": {
-                    "is_enabled": True,
-                    "xp_per_message": 15,
-                    "xp_cooldown": 60,
-                    "level_up_message": "Congratulations {user}! You reached level {level}!",
-                    "role_rewards": []
-                }
-            }
-        )
-        db.add(settings)
+@router.put("/{guild_id}/settings", response_model=LevelingSettings)
+async def update_leveling_settings(
+    guild_id: str,
+    settings_update: LevelingSettingsUpdate,
+    current_user: Dict = Depends(get_current_active_user),
+    db: AsyncSession = Depends(get_db)
+):
+    """Update leveling settings for a guild."""
+    try:
+        # Verify user has access to this guild
+        await verify_guild_permissions(guild_id, current_user)
+
+        # Get existing settings
+        query = select(LevelingSettingsModel).where(LevelingSettingsModel.guild_id == guild_id)
+        result = await db.execute(query)
+        settings = result.scalar_one_or_none()
+
+        if not settings:
+            # Create new settings if none exist
+            settings = LevelingSettingsModel(guild_id=guild_id)
+            db.add(settings)
+
+        # Update settings with new values
+        for key, value in settings_update.dict(exclude_unset=True).items():
+            setattr(settings, key, value)
+
         await db.commit()
         await db.refresh(settings)
 
-    leveling_settings = settings.custom_settings.get("leveling", {})
-    return LevelingSettings(
-        is_enabled=leveling_settings.get("is_enabled", True),
-        xp_per_message=leveling_settings.get("xp_per_message", 15),
-        xp_cooldown=leveling_settings.get("xp_cooldown", 60),
-        level_up_channel_id=settings.level_up_channel_id,
-        level_up_message=leveling_settings.get("level_up_message", "Congratulations {user}! You reached level {level}!"),
-        role_rewards=leveling_settings.get("role_rewards", [])
-    )
+        return settings
 
-@router.patch("/{guild_id}/settings", response_model=Response)
-async def update_leveling_settings(
-    guild_id: str,
-    settings: LevelingSettings,
-    db: AsyncSession = Depends(get_db),
-    current_user: dict = Depends(get_current_user)
-):
-    """Update leveling settings for a guild"""
-    # Check if guild exists
-    guild_result = await db.execute(
-        select(Guild).where(Guild.discord_id == guild_id)
-    )
-    guild = guild_result.scalar_one_or_none()
-    if not guild:
+    except Exception as e:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Guild not found"
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=str(e)
         )
 
-    # Get guild settings
-    settings_result = await db.execute(
-        select(GuildSettings).where(GuildSettings.guild_id == guild.id)
-    )
-    guild_settings = settings_result.scalar_one_or_none()
-    
-    if not guild_settings:
-        guild_settings = GuildSettings(guild_id=guild.id)
-        db.add(guild_settings)
-
-    # Update settings
-    if not guild_settings.custom_settings:
-        guild_settings.custom_settings = {}
-    
-    guild_settings.level_up_channel_id = settings.level_up_channel_id
-    guild_settings.custom_settings["leveling"] = {
-        "is_enabled": settings.is_enabled,
-        "xp_per_message": settings.xp_per_message,
-        "xp_cooldown": settings.xp_cooldown,
-        "level_up_message": settings.level_up_message,
-        "role_rewards": [reward.dict() for reward in settings.role_rewards]
-    }
-
-    await db.commit()
-    await db.refresh(guild_settings)
-
-    return Response(
-        success=True,
-        message="Leveling settings updated successfully",
-        data=settings.dict()
-    )
-
-@router.get("/{guild_id}/leaderboard", response_model=List[LeaderboardEntry])
-async def get_leaderboard(
+@router.get("/{guild_id}/leaderboard")
+async def get_guild_leaderboard(
     guild_id: str,
-    db: AsyncSession = Depends(get_db),
-    current_user: dict = Depends(get_current_user)
+    limit: int = 10,
+    offset: int = 0,
+    current_user: Dict = Depends(get_current_active_user),
+    db: AsyncSession = Depends(get_db)
 ):
-    """Get the XP leaderboard for a guild"""
-    # Check if guild exists
-    guild_result = await db.execute(
-        select(Guild).where(Guild.discord_id == guild_id)
-    )
-    guild = guild_result.scalar_one_or_none()
-    if not guild:
+    """Get the XP leaderboard for a guild."""
+    try:
+        # Verify user has access to this guild
+        await verify_guild_permissions(guild_id, current_user)
+
+        # Get user levels from database
+        query = (
+            select(UserLevelModel)
+            .where(UserLevelModel.guild_id == guild_id)
+            .order_by(UserLevelModel.xp.desc())
+            .offset(offset)
+            .limit(limit)
+        )
+        result = await db.execute(query)
+        users = result.scalars().all()
+
+        # Get total count for pagination
+        count_query = (
+            select(UserLevelModel)
+            .where(UserLevelModel.guild_id == guild_id)
+        )
+        count_result = await db.execute(count_query)
+        total_users = len(count_result.scalars().all())
+
+        return {
+            "users": users,
+            "total": total_users,
+            "offset": offset,
+            "limit": limit
+        }
+
+    except Exception as e:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Guild not found"
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=str(e)
         )
 
-    # Get leaderboard
-    result = await db.execute(
-        select(Leveling)
-        .where(Leveling.guild_id == guild.id)
-        .order_by(Leveling.xp.desc())
-        .limit(10)
-    )
-    entries = result.scalars().all()
-
-    # Format leaderboard entries
-    leaderboard = []
-    for rank, entry in enumerate(entries, 1):
-        leaderboard.append(
-            LeaderboardEntry(
-                user_discord_id=entry.user_discord_id,
-                username=entry.user_discord_id,  # This would be replaced with actual username in production
-                level=entry.level,
-                xp=entry.xp,
-                rank=rank
-            )
-        )
-
-    return leaderboard
-
-@router.get("/{guild_id}/user/{user_id}", response_model=LeaderboardEntry)
+@router.get("/{guild_id}/users/{user_id}", response_model=UserLevel)
 async def get_user_level(
     guild_id: str,
     user_id: str,
-    db: AsyncSession = Depends(get_db),
-    current_user: dict = Depends(get_current_user)
+    current_user: Dict = Depends(get_current_active_user),
+    db: AsyncSession = Depends(get_db)
 ):
-    """Get level information for a specific user"""
-    # Check if guild exists
-    guild_result = await db.execute(
-        select(Guild).where(Guild.discord_id == guild_id)
-    )
-    guild = guild_result.scalar_one_or_none()
-    if not guild:
+    """Get level information for a specific user."""
+    try:
+        # Verify user has access to this guild
+        await verify_guild_permissions(guild_id, current_user)
+
+        # Get user level from database
+        query = select(UserLevelModel).where(
+            UserLevelModel.guild_id == guild_id,
+            UserLevelModel.user_id == user_id
+        )
+        result = await db.execute(query)
+        user_level = result.scalar_one_or_none()
+
+        if not user_level:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="User not found"
+            )
+
+        return user_level
+
+    except HTTPException:
+        raise
+    except Exception as e:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Guild not found"
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=str(e)
         )
 
-    # Get user's level info
-    result = await db.execute(
-        select(Leveling)
-        .where(Leveling.guild_id == guild.id)
-        .where(Leveling.user_discord_id == user_id)
-    )
-    user_level = result.scalar_one_or_none()
-    
-    if not user_level:
+@router.post("/{guild_id}/reset")
+async def reset_guild_levels(
+    guild_id: str,
+    current_user: Dict = Depends(get_current_active_user),
+    db: AsyncSession = Depends(get_db)
+):
+    """Reset all levels and XP in a guild."""
+    try:
+        # Verify user has access to this guild
+        await verify_guild_permissions(guild_id, current_user)
+
+        # Delete all user levels for the guild
+        query = select(UserLevelModel).where(UserLevelModel.guild_id == guild_id)
+        result = await db.execute(query)
+        users = result.scalars().all()
+
+        for user in users:
+            await db.delete(user)
+
+        await db.commit()
+
+        return {"message": "All levels have been reset"}
+
+    except Exception as e:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="User not found in leveling system"
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=str(e)
         )
-
-    # Get user's rank
-    rank_result = await db.execute(
-        select(func.count())
-        .select_from(Leveling)
-        .where(Leveling.guild_id == guild.id)
-        .where(Leveling.xp > user_level.xp)
-    )
-    rank = rank_result.scalar() + 1
-
-    return LeaderboardEntry(
-        user_discord_id=user_level.user_discord_id,
-        username=user_level.user_discord_id,  # This would be replaced with actual username in production
-        level=user_level.level,
-        xp=user_level.xp,
-        rank=rank
-    )

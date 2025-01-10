@@ -12,7 +12,7 @@ idna==3.4
 multidict==6.0.4
 yarl==1.9.4
 fastapi==0.104.1
-uvicorn==0.24.0
+uvicorn[standard]==0.24.0
 sqlalchemy==2.0.23
 pydantic==2.5.2
 python-jose==3.3.0
@@ -20,3 +20,11 @@ passlib==1.7.4
 bcrypt==4.0.1
 python-multipart==0.0.6
 httpx==0.25.2
+click>=7.0
+h11>=0.8
+typing-extensions>=4.0.0
+starlette>=0.27.0
+anyio>=3.7.1
+psutil==5.9.7
+python-jose[cryptography]
+aiosqlite

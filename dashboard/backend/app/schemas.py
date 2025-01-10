@@ -1,130 +1,164 @@
-from pydantic import BaseModel, HttpUrl
-from typing import List, Optional
+from pydantic import BaseModel, Field
+from typing import Optional, Dict, List
+from datetime import datetime
 
-# Bot Installation Schemas
-class BotInstallRequest(BaseModel):
-    token: str
-    guild_id: int
-    role_ids_allowed: List[int]
-    role_id_to_give: int
-    role_id_remove_allowed: int
-    role_activity_log_channel_id: int
-    audit_log_channel_id: int
-    visa_image_url: HttpUrl
-
-class BotStatusResponse(BaseModel):
-    status: str  # "running" or "stopped"
-    logs: List[str]
-
-# Guild Settings Schemas
-class GuildSettingsBase(BaseModel):
-    prefix: str = "/"
-    language: str = "en"
-    timezone: str = "UTC"
-    welcome_channel_id: Optional[int] = None
-    log_channel_id: Optional[int] = None
-    mute_role_id: Optional[int] = None
-    auto_role_id: Optional[int] = None
-
-class GuildSettingsCreate(GuildSettingsBase):
-    guild_id: int
-
-class GuildSettingsUpdate(GuildSettingsBase):
-    pass
-
-class GuildSettingsResponse(GuildSettingsBase):
-    id: int
-    guild_id: int
-
+# Base Models
+class BaseSchema(BaseModel):
     class Config:
-        orm_mode = True
+        from_attributes = True
+        json_encoders = {
+            datetime: lambda v: v.isoformat()
+        }
 
-# Custom Command Schemas
-class CustomCommandBase(BaseModel):
+# Guild Schemas
+class GuildBase(BaseSchema):
     name: str
-    response: str
-    description: Optional[str] = None
-    enabled: bool = True
+    icon_url: Optional[str] = None
+    owner_id: str
+    member_count: int
+    settings: Dict = Field(default_factory=dict)
 
-class CustomCommandCreate(CustomCommandBase):
-    guild_id: int
+class GuildCreate(GuildBase):
+    id: str
 
-class CustomCommandUpdate(CustomCommandBase):
+class GuildUpdate(GuildBase):
     pass
 
-class CustomCommandResponse(CustomCommandBase):
-    id: int
-    guild_id: int
+class Guild(GuildBase):
+    id: str
+    created_at: datetime
+    updated_at: datetime
 
-    class Config:
-        orm_mode = True
+# Role Schemas
+class RoleBase(BaseSchema):
+    name: str
+    color: int
+    position: int
+    permissions: str
 
-# Welcome Message Schemas
-class WelcomeMessageBase(BaseModel):
-    content: str
-    embed_title: Optional[str] = None
-    embed_description: Optional[str] = None
-    embed_color: Optional[int] = None
-    enabled: bool = True
+class RoleCreate(RoleBase):
+    id: str
+    guild_id: str
 
-class WelcomeMessageCreate(WelcomeMessageBase):
-    guild_id: int
-
-class WelcomeMessageUpdate(WelcomeMessageBase):
+class RoleUpdate(RoleBase):
     pass
 
-class WelcomeMessageResponse(WelcomeMessageBase):
-    id: int
-    guild_id: int
+class Role(RoleBase):
+    id: str
+    guild_id: str
+    created_at: datetime
+    updated_at: datetime
 
-    class Config:
-        orm_mode = True
+# Channel Schemas
+class ChannelBase(BaseSchema):
+    name: str
+    type: str
+    position: int
+    settings: Dict = Field(default_factory=dict)
 
-# AutoMod Schemas
-class AutoModBase(BaseModel):
-    enabled: bool = True
-    spam_detection: bool = True
-    spam_threshold: int = 5
-    spam_interval: int = 5
-    raid_protection: bool = True
-    raid_threshold: int = 10
-    raid_interval: int = 30
-    banned_words: List[str] = []
-    warn_threshold: int = 3
-    mute_duration: int = 300
-    ban_duration: Optional[int] = None
+class ChannelCreate(ChannelBase):
+    id: str
+    guild_id: str
 
-class AutoModCreate(AutoModBase):
-    guild_id: int
-
-class AutoModUpdate(AutoModBase):
+class ChannelUpdate(ChannelBase):
     pass
 
-class AutoModResponse(AutoModBase):
+class Channel(ChannelBase):
+    id: str
+    guild_id: str
+    created_at: datetime
+    updated_at: datetime
+
+# Bot Settings Schemas
+class BotSettingsBase(BaseSchema):
+    welcome_channel_id: Optional[str] = None
+    welcome_message: Optional[str] = None
+    role_channel_id: Optional[str] = None
+    log_channel_id: Optional[str] = None
+    ticket_category_id: Optional[str] = None
+    automod_enabled: bool = False
+    leveling_enabled: bool = False
+
+class BotSettingsCreate(BotSettingsBase):
+    guild_id: str
+
+class BotSettingsUpdate(BotSettingsBase):
+    pass
+
+class BotSettings(BotSettingsBase):
     id: int
-    guild_id: int
+    guild_id: str
+    created_at: datetime
+    updated_at: datetime
 
-    class Config:
-        orm_mode = True
-
-# Leveling Schemas
-class LevelingSettingsBase(BaseModel):
+# AutoMod Rule Schemas
+class AutoModRuleBase(BaseSchema):
+    name: str
+    type: str
+    settings: Dict = Field(default_factory=dict)
     enabled: bool = True
-    xp_per_message: int = 15
+
+class AutoModRuleCreate(AutoModRuleBase):
+    guild_id: str
+
+class AutoModRuleUpdate(AutoModRuleBase):
+    pass
+
+class AutoModRule(AutoModRuleBase):
+    id: int
+    guild_id: str
+    created_at: datetime
+    updated_at: datetime
+
+# Leveling Settings Schemas
+class LevelingSettingsBase(BaseSchema):
+    xp_per_message: int = 1
     xp_cooldown: int = 60
-    level_up_channel_id: Optional[int] = None
-    level_up_message: str = "Congratulations {user}! You reached level {level}!"
-    role_rewards: dict = {}
+    level_up_channel_id: Optional[str] = None
+    level_up_message: Optional[str] = None
+    role_rewards: Dict[str, str] = Field(default_factory=dict)
 
 class LevelingSettingsCreate(LevelingSettingsBase):
-    guild_id: int
+    guild_id: str
 
 class LevelingSettingsUpdate(LevelingSettingsBase):
     pass
 
-class LevelingSettingsResponse(LevelingSettingsBase):
+class LevelingSettings(LevelingSettingsBase):
     id: int
-    guild_id: int
+    guild_id: str
+    created_at: datetime
+    updated_at: datetime
 
-    class Config:
-        orm_mode = True
+# User Level Schemas
+class UserLevelBase(BaseSchema):
+    xp: int = 0
+    level: int = 0
+    last_message_time: Optional[datetime] = None
+
+class UserLevelCreate(UserLevelBase):
+    guild_id: str
+    user_id: str
+
+class UserLevelUpdate(UserLevelBase):
+    pass
+
+class UserLevel(UserLevelBase):
+    id: int
+    guild_id: str
+    user_id: str
+    created_at: datetime
+    updated_at: datetime
+
+# Response Models
+class GuildResponse(BaseSchema):
+    guild: Guild
+    roles: List[Role]
+    channels: List[Channel]
+    settings: Optional[BotSettings] = None
+
+class GuildListResponse(BaseSchema):
+    guilds: List[Guild]
+
+class ErrorResponse(BaseSchema):
+    detail: str

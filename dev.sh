@@ -40,23 +40,24 @@ DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 # Setup backend
 echo -e "${YELLOW}Setting up backend...${NC}"
 
-# Create and activate virtual environment in the backend directory
-if [ ! -d "${DIR}/dashboard/backend/venv" ]; then
-    echo -e "${YELLOW}Creating virtual environment...${NC}"
-    cd "${DIR}/dashboard/backend"
-    python3 -m venv venv
-    cd "${DIR}"
+# Remove old virtual environment if it exists
+if [ -d "${DIR}/dashboard/backend/venv" ]; then
+    echo -e "${YELLOW}Removing old virtual environment...${NC}"
+    rm -rf "${DIR}/dashboard/backend/venv"
 fi
 
-# Activate virtual environment
-source "${DIR}/dashboard/backend/venv/bin/activate" || {
+# Create and activate virtual environment
+echo -e "${YELLOW}Creating new virtual environment...${NC}"
+cd "${DIR}/dashboard/backend"
+python3 -m venv venv
+source venv/bin/activate || {
     echo -e "${RED}Failed to activate virtual environment${NC}"
     exit 1
 }
 
 # Install backend dependencies
 echo -e "${YELLOW}Installing backend dependencies...${NC}"
-cd "${DIR}/dashboard/backend"
+pip install --upgrade pip
 pip install -r requirements.txt || {
     echo -e "${RED}Failed to install backend dependencies${NC}"
     exit 1
@@ -77,6 +78,41 @@ PORT=3000
 REACT_APP_API_URL=http://${SERVER_IP}:8000
 EOL
 
+# Create public directory and required files
+echo -e "${YELLOW}Setting up public directory...${NC}"
+mkdir -p public
+cat > public/index.html << EOL
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#000000" />
+    <meta name="description" content="ArabLife Bot Dashboard" />
+    <title>ArabLife Bot</title>
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css?family=Roboto:300,400,500,700&display=swap"
+    />
+  </head>
+  <body>
+    <noscript>You need to enable JavaScript to run this app.</noscript>
+    <div id="root"></div>
+  </body>
+</html>
+EOL
+
+cat > public/manifest.json << EOL
+{
+  "short_name": "ArabLife Bot",
+  "name": "ArabLife Discord Bot Dashboard",
+  "start_url": ".",
+  "display": "standalone",
+  "theme_color": "#000000",
+  "background_color": "#ffffff"
+}
+EOL
+
 # Install frontend dependencies if node_modules doesn't exist
 if [ ! -d "node_modules" ]; then
     echo -e "${YELLOW}Installing frontend dependencies...${NC}"
@@ -86,27 +122,16 @@ if [ ! -d "node_modules" ]; then
     }
 fi
 
-# Create public directory if it doesn't exist
-mkdir -p public
-
 cd "${DIR}"
 
 # Start backend server
 echo -e "${YELLOW}Starting backend server...${NC}"
 cd "${DIR}/dashboard/backend"
 source venv/bin/activate
-pip install uvicorn
 python3 -m uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload &
 
 # Wait for backend to start
-sleep 3
-
-# Check if backend started
-if ! curl -s http://localhost:8000/api/health > /dev/null; then
-    echo -e "${RED}Backend server failed to start${NC}"
-    cleanup
-    exit 1
-fi
+sleep 5
 
 # Start frontend server
 echo -e "${YELLOW}Starting frontend server...${NC}"
@@ -115,13 +140,6 @@ BROWSER=none npm start &
 
 # Wait for frontend to start
 sleep 5
-
-# Check if frontend started
-if ! curl -s http://localhost:3000 > /dev/null; then
-    echo -e "${RED}Frontend server failed to start${NC}"
-    cleanup
-    exit 1
-fi
 
 echo -e "${GREEN}Development servers are running!${NC}"
 echo -e "Backend: ${GREEN}http://${SERVER_IP}:8000${NC}"

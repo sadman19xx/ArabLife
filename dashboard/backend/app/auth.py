@@ -1,142 +1,110 @@
-from datetime import datetime, timedelta
-from typing import Optional
 from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
 from jose import JWTError, jwt
-from passlib.context import CryptContext
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.future import select
-from .database import get_db
-from .models import User
+from datetime import datetime, timedelta
+from typing import Optional, Dict
 import os
+from .schemas import ErrorResponse
 
-# Security configuration
-SECRET_KEY = os.getenv("SECRET_KEY", "your-secret-key-here")  # Change in production
+# Configuration
+SECRET_KEY = os.getenv("JWT_SECRET_KEY", "your-secret-key")  # Change in production
 ALGORITHM = "HS256"
-ACCESS_TOKEN_EXPIRE_MINUTES = 30
+ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 24  # 24 hours
 
 # Discord OAuth2 settings
 DISCORD_CLIENT_ID = os.getenv("DISCORD_CLIENT_ID")
 DISCORD_CLIENT_SECRET = os.getenv("DISCORD_CLIENT_SECRET")
-DISCORD_REDIRECT_URI = os.getenv("DISCORD_REDIRECT_URI", "http://localhost:3000/auth/callback")
+DISCORD_REDIRECT_URI = os.getenv("DISCORD_REDIRECT_URI", "http://45.76.83.149/callback")
 DISCORD_API_ENDPOINT = "https://discord.com/api/v10"
 
-# Password hashing
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
 
-class AuthManager:
-    @staticmethod
-    def verify_password(plain_password: str, hashed_password: str) -> bool:
-        return pwd_context.verify(plain_password, hashed_password)
+def create_access_token(data: Dict, expires_delta: Optional[timedelta] = None) -> str:
+    """Create a new JWT access token."""
+    to_encode = data.copy()
+    if expires_delta:
+        expire = datetime.utcnow() + expires_delta
+    else:
+        expire = datetime.utcnow() + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+    
+    to_encode.update({"exp": expire})
+    encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
+    return encoded_jwt
 
-    @staticmethod
-    def get_password_hash(password: str) -> str:
-        return pwd_context.hash(password)
-
-    @staticmethod
-    def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -> str:
-        to_encode = data.copy()
-        if expires_delta:
-            expire = datetime.utcnow() + expires_delta
-        else:
-            expire = datetime.utcnow() + timedelta(minutes=15)
-        to_encode.update({"exp": expire})
-        encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
-        return encoded_jwt
-
-    @staticmethod
-    async def get_current_user(
-        token: str = Depends(oauth2_scheme),
-        db: AsyncSession = Depends(get_db)
-    ) -> User:
-        credentials_exception = HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Could not validate credentials",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
-        try:
-            payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
-            user_id: str = payload.get("sub")
-            if user_id is None:
-                raise credentials_exception
-        except JWTError:
+async def get_current_user(token: str = Depends(oauth2_scheme)) -> Dict:
+    """Validate and decode JWT token to get current user."""
+    credentials_exception = HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="Could not validate credentials",
+        headers={"WWW-Authenticate": "Bearer"},
+    )
+    
+    try:
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        user_id: str = payload.get("sub")
+        if user_id is None:
             raise credentials_exception
-
-        result = await db.execute(select(User).filter(User.discord_id == user_id))
-        user = result.scalar_one_or_none()
         
-        if user is None:
-            raise credentials_exception
-        return user
-
-    @staticmethod
-    async def get_current_admin(
-        current_user: User = Depends(get_current_user)
-    ) -> User:
-        if not current_user.is_admin:
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="Not enough permissions"
-            )
-        return current_user
-
-class DiscordOAuth:
-    @staticmethod
-    def get_oauth_url() -> str:
-        return f"{DISCORD_API_ENDPOINT}/oauth2/authorize?client_id={DISCORD_CLIENT_ID}&redirect_uri={DISCORD_REDIRECT_URI}&response_type=code&scope=identify%20email%20guilds"
-
-    @staticmethod
-    async def exchange_code(code: str) -> dict:
-        """Exchange authorization code for access token"""
-        import aiohttp
-
-        data = {
-            'client_id': DISCORD_CLIENT_ID,
-            'client_secret': DISCORD_CLIENT_SECRET,
-            'grant_type': 'authorization_code',
-            'code': code,
-            'redirect_uri': DISCORD_REDIRECT_URI,
-            'scope': 'identify email guilds'
+        # Add additional user data as needed
+        user_data = {
+            "id": user_id,
+            "username": payload.get("username"),
+            "discriminator": payload.get("discriminator"),
+            "avatar": payload.get("avatar"),
+            "guilds": payload.get("guilds", [])
         }
-
-        async with aiohttp.ClientSession() as session:
-            async with session.post(f'{DISCORD_API_ENDPOINT}/oauth2/token', data=data) as response:
-                if response.status != 200:
-                    raise HTTPException(
-                        status_code=response.status,
-                        detail="Failed to exchange code"
-                    )
-                return await response.json()
-
-    @staticmethod
-    async def get_user_data(access_token: str) -> dict:
-        """Get user data from Discord"""
-        import aiohttp
-
-        headers = {'Authorization': f'Bearer {access_token}'}
+        return user_data
         
-        async with aiohttp.ClientSession() as session:
-            async with session.get(f'{DISCORD_API_ENDPOINT}/users/@me', headers=headers) as response:
-                if response.status != 200:
-                    raise HTTPException(
-                        status_code=response.status,
-                        detail="Failed to get user data"
-                    )
-                return await response.json()
+    except JWTError:
+        raise credentials_exception
 
-    @staticmethod
-    async def get_user_guilds(access_token: str) -> list:
-        """Get user's guilds from Discord"""
-        import aiohttp
+def get_discord_oauth_url() -> str:
+    """Generate Discord OAuth2 URL."""
+    if not DISCORD_CLIENT_ID:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Discord client ID not configured"
+        )
+    
+    params = {
+        "client_id": DISCORD_CLIENT_ID,
+        "redirect_uri": DISCORD_REDIRECT_URI,
+        "response_type": "code",
+        "scope": "identify guilds"
+    }
+    
+    query = "&".join(f"{k}={v}" for k, v in params.items())
+    return f"https://discord.com/api/oauth2/authorize?{query}"
 
-        headers = {'Authorization': f'Bearer {access_token}'}
-        
-        async with aiohttp.ClientSession() as session:
-            async with session.get(f'{DISCORD_API_ENDPOINT}/users/@me/guilds', headers=headers) as response:
-                if response.status != 200:
-                    raise HTTPException(
-                        status_code=response.status,
-                        detail="Failed to get user guilds"
-                    )
-                return await response.json()
+async def verify_guild_access(user_data: Dict, guild_id: str) -> bool:
+    """Verify if user has access to the specified guild."""
+    user_guilds = user_data.get("guilds", [])
+    return any(str(guild["id"]) == guild_id for guild in user_guilds)
+
+def get_bot_token() -> str:
+    """Get bot token from environment variables."""
+    token = os.getenv("DISCORD_BOT_TOKEN")
+    if not token:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Bot token not configured"
+        )
+    return token
+
+# Dependencies
+async def get_current_active_user(
+    current_user: Dict = Depends(get_current_user)
+) -> Dict:
+    """Get current active user with additional checks if needed."""
+    return current_user
+
+async def verify_guild_permissions(
+    guild_id: str,
+    current_user: Dict = Depends(get_current_active_user)
+) -> None:
+    """Verify user has permissions for the specified guild."""
+    if not await verify_guild_access(current_user, guild_id):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You don't have permission to access this guild"
+        )

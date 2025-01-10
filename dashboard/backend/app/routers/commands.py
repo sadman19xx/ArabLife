@@ -1,217 +1,195 @@
-from fastapi import APIRouter, Depends, HTTPException, status, Query
+from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.future import select
-from typing import List, Optional
-import discord
-
+from typing import Dict, List
+import httpx
 from ..database import get_db
-from ..models import Guild, CustomCommand
-from ..schemas import (
-    CustomCommandCreate,
-    CustomCommandUpdate,
-    CustomCommandResponse
+from ..auth import get_current_active_user, verify_guild_permissions, get_bot_token
+from ..schemas import ErrorResponse
+
+router = APIRouter(
+    prefix="/api/commands",
+    tags=["commands"],
+    responses={401: {"model": ErrorResponse}}
 )
-from ..auth import AuthManager
-from ..models import User
 
-router = APIRouter()
-
-@router.get("/{guild_id}", response_model=List[CustomCommandResponse])
-async def list_commands(
-    guild_id: int,
-    current_user: User = Depends(AuthManager.get_current_user),
+@router.get("/{guild_id}")
+async def get_guild_commands(
+    guild_id: str,
+    current_user: Dict = Depends(get_current_active_user),
     db: AsyncSession = Depends(get_db)
 ):
-    """List all custom commands for a guild"""
-    result = await db.execute(
-        select(CustomCommand).filter(CustomCommand.guild_id == guild_id)
-    )
-    commands = result.scalars().all()
-    return commands
+    """Get all commands available in a guild."""
+    try:
+        # Verify user has access to this guild
+        await verify_guild_permissions(guild_id, current_user)
 
-@router.post("/{guild_id}", response_model=CustomCommandResponse)
-async def create_command(
-    guild_id: int,
-    command: CustomCommandCreate,
-    current_user: User = Depends(AuthManager.get_current_user),
-    db: AsyncSession = Depends(get_db)
-):
-    """Create a new custom command"""
-    # Check if command name already exists
-    result = await db.execute(
-        select(CustomCommand).filter(
-            CustomCommand.guild_id == guild_id,
-            CustomCommand.name == command.name
-        )
-    )
-    if result.scalar_one_or_none():
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Command name already exists"
-        )
+        # Get bot token
+        bot_token = get_bot_token()
+        headers = {
+            "Authorization": f"Bot {bot_token}"
+        }
 
-    # Validate command name format
-    if not command.name.isalnum() or len(command.name) > 32:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Command name must be alphanumeric and max 32 characters"
-        )
-
-    new_command = CustomCommand(
-        guild_id=guild_id,
-        name=command.name,
-        response=command.response,
-        description=command.description,
-        required_role_id=command.required_role_id,
-        cooldown=command.cooldown
-    )
-    
-    db.add(new_command)
-    await db.commit()
-    await db.refresh(new_command)
-    return new_command
-
-@router.get("/{guild_id}/{command_id}", response_model=CustomCommandResponse)
-async def get_command(
-    guild_id: int,
-    command_id: int,
-    current_user: User = Depends(AuthManager.get_current_user),
-    db: AsyncSession = Depends(get_db)
-):
-    """Get a specific custom command"""
-    result = await db.execute(
-        select(CustomCommand).filter(
-            CustomCommand.guild_id == guild_id,
-            CustomCommand.id == command_id
-        )
-    )
-    command = result.scalar_one_or_none()
-    
-    if not command:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Command not found"
-        )
-    
-    return command
-
-@router.patch("/{guild_id}/{command_id}", response_model=CustomCommandResponse)
-async def update_command(
-    guild_id: int,
-    command_id: int,
-    command_update: CustomCommandUpdate,
-    current_user: User = Depends(AuthManager.get_current_user),
-    db: AsyncSession = Depends(get_db)
-):
-    """Update a custom command"""
-    result = await db.execute(
-        select(CustomCommand).filter(
-            CustomCommand.guild_id == guild_id,
-            CustomCommand.id == command_id
-        )
-    )
-    command = result.scalar_one_or_none()
-    
-    if not command:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Command not found"
-        )
-
-    # Check if new name conflicts with existing commands
-    if command_update.name and command_update.name != command.name:
-        result = await db.execute(
-            select(CustomCommand).filter(
-                CustomCommand.guild_id == guild_id,
-                CustomCommand.name == command_update.name
+        # Get application ID from bot token
+        async with httpx.AsyncClient() as client:
+            me_response = await client.get(
+                "https://discord.com/api/v10/users/@me",
+                headers=headers
             )
+            if me_response.status_code != 200:
+                raise HTTPException(
+                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                    detail="Failed to get bot information"
+                )
+            
+            application_id = me_response.json()["id"]
+
+            # Get guild commands
+            commands_url = f"https://discord.com/api/v10/applications/{application_id}/guilds/{guild_id}/commands"
+            commands_response = await client.get(commands_url, headers=headers)
+
+            if commands_response.status_code != 200:
+                raise HTTPException(
+                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                    detail="Failed to get guild commands"
+                )
+
+            commands = commands_response.json()
+
+            # Format commands for response
+            formatted_commands = []
+            for cmd in commands:
+                formatted_cmd = {
+                    "id": cmd["id"],
+                    "name": cmd["name"],
+                    "description": cmd["description"],
+                    "options": cmd.get("options", []),
+                    "default_member_permissions": cmd.get("default_member_permissions"),
+                    "type": cmd.get("type", 1)  # 1 is CHAT_INPUT
+                }
+                formatted_commands.append(formatted_cmd)
+
+            return formatted_commands
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=str(e)
         )
-        if result.scalar_one_or_none():
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Command name already exists"
+
+@router.put("/{guild_id}/{command_id}/permissions")
+async def update_command_permissions(
+    guild_id: str,
+    command_id: str,
+    permissions: List[Dict],
+    current_user: Dict = Depends(get_current_active_user),
+    db: AsyncSession = Depends(get_db)
+):
+    """Update permissions for a specific command in a guild."""
+    try:
+        # Verify user has access to this guild
+        await verify_guild_permissions(guild_id, current_user)
+
+        # Get bot token
+        bot_token = get_bot_token()
+        headers = {
+            "Authorization": f"Bot {bot_token}"
+        }
+
+        # Get application ID from bot token
+        async with httpx.AsyncClient() as client:
+            me_response = await client.get(
+                "https://discord.com/api/v10/users/@me",
+                headers=headers
+            )
+            if me_response.status_code != 200:
+                raise HTTPException(
+                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                    detail="Failed to get bot information"
+                )
+            
+            application_id = me_response.json()["id"]
+
+            # Update command permissions
+            permissions_url = f"https://discord.com/api/v10/applications/{application_id}/guilds/{guild_id}/commands/{command_id}/permissions"
+            permissions_response = await client.put(
+                permissions_url,
+                headers=headers,
+                json={"permissions": permissions}
             )
 
-    # Update command with new values
-    for field, value in command_update.dict(exclude_unset=True).items():
-        setattr(command, field, value)
-    
-    await db.commit()
-    await db.refresh(command)
-    return command
+            if permissions_response.status_code != 200:
+                raise HTTPException(
+                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                    detail="Failed to update command permissions"
+                )
 
-@router.delete("/{guild_id}/{command_id}")
-async def delete_command(
-    guild_id: int,
-    command_id: int,
-    current_user: User = Depends(AuthManager.get_current_user),
-    db: AsyncSession = Depends(get_db)
-):
-    """Delete a custom command"""
-    result = await db.execute(
-        select(CustomCommand).filter(
-            CustomCommand.guild_id == guild_id,
-            CustomCommand.id == command_id
-        )
-    )
-    command = result.scalar_one_or_none()
-    
-    if not command:
+            return permissions_response.json()
+
+    except HTTPException:
+        raise
+    except Exception as e:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Command not found"
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=str(e)
         )
-    
-    await db.delete(command)
-    await db.commit()
-    
-    return {"status": "success", "message": "Command deleted"}
 
-@router.post("/{guild_id}/{command_id}/toggle")
-async def toggle_command(
-    guild_id: int,
-    command_id: int,
-    current_user: User = Depends(AuthManager.get_current_user),
+@router.post("/{guild_id}/sync")
+async def sync_commands(
+    guild_id: str,
+    current_user: Dict = Depends(get_current_active_user),
     db: AsyncSession = Depends(get_db)
 ):
-    """Toggle a command's enabled status"""
-    result = await db.execute(
-        select(CustomCommand).filter(
-            CustomCommand.guild_id == guild_id,
-            CustomCommand.id == command_id
-        )
-    )
-    command = result.scalar_one_or_none()
-    
-    if not command:
+    """Sync all commands to a guild."""
+    try:
+        # Verify user has access to this guild
+        await verify_guild_permissions(guild_id, current_user)
+
+        # Get bot token
+        bot_token = get_bot_token()
+        headers = {
+            "Authorization": f"Bot {bot_token}"
+        }
+
+        # Get application ID from bot token
+        async with httpx.AsyncClient() as client:
+            me_response = await client.get(
+                "https://discord.com/api/v10/users/@me",
+                headers=headers
+            )
+            if me_response.status_code != 200:
+                raise HTTPException(
+                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                    detail="Failed to get bot information"
+                )
+            
+            application_id = me_response.json()["id"]
+
+            # TODO: Get commands from bot's command registry
+            # This will be implemented when integrating with the Discord bot
+            commands_to_sync = []
+
+            # Sync commands to guild
+            sync_url = f"https://discord.com/api/v10/applications/{application_id}/guilds/{guild_id}/commands"
+            sync_response = await client.put(
+                sync_url,
+                headers=headers,
+                json=commands_to_sync
+            )
+
+            if sync_response.status_code != 200:
+                raise HTTPException(
+                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                    detail="Failed to sync commands"
+                )
+
+            return {"message": "Commands synced successfully"}
+
+    except HTTPException:
+        raise
+    except Exception as e:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Command not found"
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=str(e)
         )
-    
-    command.is_enabled = not command.is_enabled
-    await db.commit()
-    
-    return {
-        "status": "success",
-        "message": f"Command {'enabled' if command.is_enabled else 'disabled'}",
-        "is_enabled": command.is_enabled
-    }
-
-@router.get("/{guild_id}/search")
-async def search_commands(
-    guild_id: int,
-    query: str = Query(..., min_length=1),
-    current_user: User = Depends(AuthManager.get_current_user),
-    db: AsyncSession = Depends(get_db)
-):
-    """Search for commands by name or description"""
-    result = await db.execute(
-        select(CustomCommand).filter(
-            CustomCommand.guild_id == guild_id,
-            (CustomCommand.name.ilike(f"%{query}%") |
-             CustomCommand.description.ilike(f"%{query}%"))
-        )
-    )
-    commands = result.scalars().all()
-    return commands

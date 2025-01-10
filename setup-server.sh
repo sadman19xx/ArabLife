@@ -29,21 +29,24 @@ apt-get install -y \
     git \
     nginx \
     screen \
-    build-essential || {
+    build-essential \
+    libcap2-bin || {
     echo -e "${RED}Failed to install system dependencies${NC}"
     exit 1
 }
 
 # Install Node.js 18.x
 echo -e "${YELLOW}Installing Node.js...${NC}"
-curl -fsSL https://deb.nodesource.com/setup_18.x | bash - || {
-    echo -e "${RED}Failed to setup Node.js repository${NC}"
-    exit 1
-}
-apt-get install -y nodejs || {
-    echo -e "${RED}Failed to install Node.js${NC}"
-    exit 1
-}
+if ! command -v node &> /dev/null; then
+    curl -fsSL https://deb.nodesource.com/setup_18.x | bash - || {
+        echo -e "${RED}Failed to setup Node.js repository${NC}"
+        exit 1
+    }
+    apt-get install -y nodejs || {
+        echo -e "${RED}Failed to install Node.js${NC}"
+        exit 1
+    }
+fi
 
 # Verify installations
 echo -e "${YELLOW}Verifying installations...${NC}"
@@ -151,13 +154,14 @@ DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 # Create required directories
 echo -e "${YELLOW}Creating required directories...${NC}"
 mkdir -p "${DIR}/dashboard/frontend/public"
-mkdir -p "${DIR}/dashboard/backend"
+mkdir -p "${DIR}/dashboard/backend/venv"
 
 # Set up backend virtual environment
 echo -e "${YELLOW}Setting up Python virtual environment...${NC}"
 cd "${DIR}/dashboard/backend"
 python3 -m venv venv
 source venv/bin/activate
+pip install --upgrade pip
 pip install -r requirements.txt
 deactivate
 
@@ -174,6 +178,9 @@ chown -R $SUDO_USER:$SUDO_USER "${DIR}" || {
     echo -e "${RED}Failed to set file permissions${NC}"
     exit 1
 }
+
+# Set permissions for running on port 80
+setcap 'cap_net_bind_service=+ep' $(which node)
 
 # Make scripts executable
 chmod +x "${DIR}/dev.sh"
