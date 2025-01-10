@@ -68,17 +68,14 @@ cd "${DIR}"
 echo -e "${YELLOW}Setting up frontend...${NC}"
 cd "${DIR}/dashboard/frontend"
 
-# Copy development environment file if it doesn't exist
-if [ ! -f ".env.development" ]; then
-    echo -e "${YELLOW}Creating development environment configuration...${NC}"
-    cat > .env.development << EOL
-PORT=3000
+# Create .env file
+echo -e "${YELLOW}Creating environment configuration...${NC}"
+cat > .env << EOL
+DANGEROUSLY_DISABLE_HOST_CHECK=true
 HOST=${SERVER_IP}
+PORT=3000
 REACT_APP_API_URL=http://${SERVER_IP}:8000
-WDS_SOCKET_HOST=${SERVER_IP}
-WDS_SOCKET_PORT=3000
 EOL
-fi
 
 # Install frontend dependencies if node_modules doesn't exist
 if [ ! -d "node_modules" ]; then
@@ -98,25 +95,32 @@ cd "${DIR}"
 echo -e "${YELLOW}Starting backend server...${NC}"
 cd "${DIR}/dashboard/backend"
 source venv/bin/activate
+pip install uvicorn
 python3 -m uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload &
+
+# Wait for backend to start
+sleep 3
+
+# Check if backend started
+if ! curl -s http://localhost:8000/api/health > /dev/null; then
+    echo -e "${RED}Backend server failed to start${NC}"
+    cleanup
+    exit 1
+fi
 
 # Start frontend server
 echo -e "${YELLOW}Starting frontend server...${NC}"
 cd "${DIR}/dashboard/frontend"
-BROWSER=none NODE_ENV=development npm start &
+BROWSER=none npm start &
 
-# Wait a moment to check if servers started successfully
+# Wait for frontend to start
 sleep 5
 
-# Check if servers are running
-if ! pgrep -f "uvicorn" > /dev/null; then
-    echo -e "${RED}Backend server failed to start${NC}"
-    cleanup
-fi
-
-if ! pgrep -f "react-scripts start" > /dev/null; then
+# Check if frontend started
+if ! curl -s http://localhost:3000 > /dev/null; then
     echo -e "${RED}Frontend server failed to start${NC}"
     cleanup
+    exit 1
 fi
 
 echo -e "${GREEN}Development servers are running!${NC}"
