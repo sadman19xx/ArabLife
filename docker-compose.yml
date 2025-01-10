@@ -2,13 +2,64 @@ version: '3.8'
 
 services:
   bot:
-    build: .
+    build: 
+      context: .
+      target: production
     restart: unless-stopped
     environment:
       - PYTHONUNBUFFERED=1
+      - PYTHONDONTWRITEBYTECODE=1
+    env_file: .env
     volumes:
-      - .:/app
-    command: ./start.sh
+      - bot-data:/app/data
+      - bot-logs:/app/logs
+    networks:
+      - bot-network
+    depends_on:
+      redis:
+        condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          cpus: '1'
+          memory: 1G
+        reservations:
+          cpus: '0.25'
+          memory: 512M
+    healthcheck:
+      test: ["CMD", "python", "-c", "import requests; requests.get('http://localhost:8080/health')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 5s
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  redis:
+    image: redis:7-alpine
+    command: redis-server --appendonly yes
+    volumes:
+      - redis-data:/data
+    networks:
+      - bot-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 512M
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
 
   dashboard-backend:
     build: ./dashboard/backend
@@ -17,8 +68,31 @@ services:
       - "8000:8000"
     environment:
       - PYTHONUNBUFFERED=1
+      - PYTHONDONTWRITEBYTECODE=1
+    env_file: ./dashboard/backend/.env
     volumes:
-      - ./dashboard/backend:/app
+      - dashboard-data:/app/data
+      - dashboard-logs:/app/logs
+    networks:
+      - bot-network
+    depends_on:
+      redis:
+        condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          cpus: '1'
+          memory: 1G
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
 
   dashboard-frontend:
     build: ./dashboard/frontend
@@ -27,7 +101,45 @@ services:
       - "3000:3000"
     environment:
       - NODE_ENV=production
+    env_file: ./dashboard/frontend/.env
     volumes:
-      - ./dashboard/frontend:/app
+      - frontend-build:/app/build
+    networks:
+      - bot-network
     depends_on:
-      - dashboard-backend
+      dashboard-backend:
+        condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 512M
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "http://localhost:3000"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+volumes:
+  bot-data:
+    name: arablife_bot_data
+  bot-logs:
+    name: arablife_bot_logs
+  redis-data:
+    name: arablife_redis_data
+  dashboard-data:
+    name: arablife_dashboard_data
+  dashboard-logs:
+    name: arablife_dashboard_logs
+  frontend-build:
+    name: arablife_frontend_build
+
+networks:
+  bot-network:
+    name: arablife_network
+    driver: bridge
