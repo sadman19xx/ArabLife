@@ -339,7 +339,7 @@ class AutoModCommands(Cog):
         self,
         interaction: discord.Interaction,
         action: Literal["add", "remove"],
-        target: Union[discord.Role, discord.TextChannel]
+        target: Union[discord.Role, discord.abc.GuildChannel]
     ):
         """Manage AutoMod exemptions"""
         try:

@@ -6,6 +6,35 @@ from typing import Optional
 import discord
 from config import Config
 
+class LoggerMixin:
+    """Mixin class to provide logging functionality to cogs"""
+    
+    def __init__(self):
+        self.logger = logging.getLogger(self.__class__.__name__)
+        
+    def log_info(self, message: str):
+        """Log an info message"""
+        self.logger.info(message)
+        
+    def log_warning(self, message: str):
+        """Log a warning message"""
+        self.logger.warning(message)
+        
+    def log_error(self, message: str):
+        """Log an error message"""
+        self.logger.error(message)
+        
+    def log_debug(self, message: str):
+        """Log a debug message"""
+        self.logger.debug(message)
+        
+    async def log_to_channel(self, channel: discord.TextChannel, message: str):
+        """Log a message to a Discord channel"""
+        try:
+            await channel.send(message)
+        except Exception as e:
+            self.log_error(f"Failed to log to channel {channel.id}: {e}")
+
 class DiscordHandler(logging.Handler):
     """Custom logging handler that sends logs to a Discord channel"""
     

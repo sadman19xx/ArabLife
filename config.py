@@ -13,6 +13,15 @@ class Config:
     GUILD_ID = int(os.getenv('GUILD_ID', 0))
     APPLICATION_ID = int(os.getenv('APPLICATION_ID', 0))  # Required for slash commands
     
+    # Command cooldowns (in seconds)
+    ROLE_COMMAND_COOLDOWN = int(os.getenv('ROLE_COMMAND_COOLDOWN', 5))
+    SOUND_COMMAND_COOLDOWN = int(os.getenv('SOUND_COMMAND_COOLDOWN', 5))
+    STATUS_COMMAND_COOLDOWN = int(os.getenv('STATUS_COMMAND_COOLDOWN', 5))
+    TICKET_COMMAND_COOLDOWN = int(os.getenv('TICKET_COMMAND_COOLDOWN', 5))
+    SECURITY_COMMAND_COOLDOWN = int(os.getenv('SECURITY_COMMAND_COOLDOWN', 5))
+    LEVEL_COMMAND_COOLDOWN = int(os.getenv('LEVEL_COMMAND_COOLDOWN', 5))
+    AUTOMOD_COMMAND_COOLDOWN = int(os.getenv('AUTOMOD_COMMAND_COOLDOWN', 5))
+    
     # Welcome settings
     WELCOME_VOICE_CHANNEL_ID = int(os.getenv('WELCOME_VOICE_CHANNEL_ID', 1309595750878937240))
     WELCOME_SOUND_PATH = os.getenv('WELCOME_SOUND_PATH', 'welcome.mp3')
