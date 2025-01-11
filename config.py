@@ -151,6 +151,11 @@ class Config:
     LOG_BACKUP_COUNT: int = parse_int(os.getenv('LOG_BACKUP_COUNT'), 5)
     LOG_TO_CONSOLE: bool = parse_bool(os.getenv('LOG_TO_CONSOLE'), True)
     LOG_TO_FILE: bool = parse_bool(os.getenv('LOG_TO_FILE'), True)
+
+    # Health check settings
+    HEALTH_CHECK_HOST: str = os.getenv('HEALTH_CHECK_HOST', '0.0.0.0')
+    HEALTH_CHECK_PORT: int = parse_int(os.getenv('HEALTH_CHECK_PORT'), 0)  # 0 means find available port
+    HEALTH_CHECK_METRICS_COOLDOWN: float = parse_float(os.getenv('HEALTH_CHECK_METRICS_COOLDOWN'), 5.0)
     
     @classmethod
     def validate_config(cls):

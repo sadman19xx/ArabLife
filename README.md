@@ -2,7 +2,7 @@
 
 Discord bot for Arabic communities with welcome system, role management, and security features.
 
-## Ubuntu Installation
+## Ubuntu Server Installation
 
 1. Update system and install dependencies:
 ```bash
@@ -26,6 +26,12 @@ chmod +x install.sh run.sh
 4. Start the bot:
 ```bash
 ./run.sh
+```
+
+5. For production deployment:
+```bash
+sudo systemctl start arablife-bot
+sudo systemctl enable arablife-bot
 ```
 
 ## Features
@@ -74,6 +80,39 @@ chmod +x install.sh run.sh
 - `/automod_exempt` - Add exemptions
 - `/automod_status` - View settings
 
+## Environment Variables
+
+Key environment variables in `.env`:
+```
+TOKEN=your_bot_token
+GUILD_ID=your_guild_id
+ROLE_IDS_ALLOWED=role_id1,role_id2
+WELCOME_CHANNEL_ID=channel_id
+WELCOME_VOICE_CHANNEL_ID=channel_id
+```
+
+See `.env.example` for all available options.
+
+## Project Structure
+
+```
+arablife/
+├── bot.py              # Main bot file
+├── config.py           # Configuration
+├── requirements.txt    # Python dependencies
+├── cogs/              # Bot commands
+│   ├── welcome_commands.py
+│   ├── role_commands.py
+│   └── ...
+├── utils/             # Utility functions
+│   ├── database.py
+│   ├── logger.py
+│   └── health.py
+├── fonts/            # Required fonts
+│   └── arabic.ttf
+└── data/             # Database and storage
+```
+
 ## Troubleshooting
 
 1. **Welcome Sound Issues**
@@ -93,3 +132,11 @@ For support:
 1. Check `logs/bot.log`
 2. Verify `.env` settings
 3. Check Discord permissions
+
+## Bot Hosting
+
+For quick setup on bot-hosting platforms, see [README_BASIC.md](README_BASIC.md).
+
+## License
+
+This project is licensed under the MIT License - see the LICENSE file for details.

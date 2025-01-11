@@ -45,7 +45,12 @@ class ArabLifeBot(commands.Bot):
                 replied_user=True
             )
         )
-        self.health_server = HealthCheck(self)  # Health check server
+        self.health_server = HealthCheck(
+            self,
+            host=Config.HEALTH_CHECK_HOST,
+            port=Config.HEALTH_CHECK_PORT,
+            metrics_cooldown=Config.HEALTH_CHECK_METRICS_COOLDOWN
+        )  # Health check server
         self.cog_dependencies = {
             'cogs.leveling_commands': ['utils.database'],
             'cogs.automod_commands': ['utils.database'],

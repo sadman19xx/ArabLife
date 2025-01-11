@@ -95,7 +95,7 @@ async def test_metrics_endpoint(bot: ArabLifeBot):
             assert 'users' in data
             assert 'latency' in data
             assert 'cpu_percent' in data
-            assert 'memory_percent' in data
+            assert 'memory' in data
             assert 'cached_tickets' in data
             assert 'cached_prefixes' in data
             assert 'commands_used' in data
@@ -123,21 +123,6 @@ async def test_database_operations(bot: ArabLifeBot, setup_database):
         assert ticket is not None
         assert ticket['ticket_type'] == "player_report"
         assert ticket['status'] == "open"
-
-@pytest.mark.asyncio
-async def test_redis_caching(bot: ArabLifeBot, mock_redis):
-    """Test Redis caching"""
-    # Test setting cache
-    await mock_redis.set("test_key", "test_value")
-    assert await mock_redis.exists("test_key")
-    
-    # Test getting cache
-    value = await mock_redis.get("test_key")
-    assert value == "test_value"
-    
-    # Test deleting cache
-    await mock_redis.delete("test_key")
-    assert not await mock_redis.exists("test_key")
 
 @pytest.mark.asyncio
 async def test_bot_shutdown(bot: ArabLifeBot):

@@ -128,27 +128,3 @@ async def setup_database():
         """, ("111111111", "123456789", "987654321", "player_report", "open"))
         
         await db.commit()
-
-@pytest.fixture
-def mock_redis(monkeypatch):
-    """Mock Redis for testing"""
-    class MockRedis:
-        def __init__(self):
-            self.data = {}
-            
-        async def get(self, key):
-            return self.data.get(key)
-            
-        async def set(self, key, value, ex=None):
-            self.data[key] = value
-            
-        async def delete(self, key):
-            if key in self.data:
-                del self.data[key]
-                
-        async def exists(self, key):
-            return key in self.data
-    
-    mock_redis = MockRedis()
-    monkeypatch.setattr("bot.redis", mock_redis)
-    return mock_redis

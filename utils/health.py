@@ -32,7 +32,7 @@ class HealthCheck:
         _metrics_cooldown: Cooldown between metrics requests
     """
     
-    def __init__(self, bot: discord.Client, host: str = '0.0.0.0', port: int = 8080, metrics_cooldown: float = 5.0) -> None:
+    def __init__(self, bot: discord.Client, host: str = '0.0.0.0', port: int = 0, metrics_cooldown: float = 5.0) -> None:
         self.bot = bot
         self.host = host
         self.port = port
@@ -73,6 +73,33 @@ class HealthCheck:
             logger.error(error_msg)
             raise HealthCheckError(error_msg) from e
 
+    @staticmethod
+    async def _find_available_port(start_port: int = 8080, max_attempts: int = 10) -> int:
+        """Find an available port starting from start_port
+        
+        Args:
+            start_port: Port to start checking from
+            max_attempts: Maximum number of ports to try
+            
+        Returns:
+            Available port number
+            
+        Raises:
+            HealthCheckError: If no available port is found
+        """
+        import socket
+        
+        for port in range(start_port, start_port + max_attempts):
+            try:
+                # Check if port is in use
+                with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+                    s.bind(('0.0.0.0', port))
+                    return port
+            except OSError:
+                continue
+                
+        raise HealthCheckError(f"No available ports found between {start_port} and {start_port + max_attempts - 1}")
+
     async def start(self) -> None:
         """Start the health check server
         
@@ -80,15 +107,40 @@ class HealthCheck:
             HealthCheckError: If server fails to start
         """
         try:
+            # If port is 0, find an available port
+            if self.port == 0:
+                try:
+                    self.port = await self._find_available_port()
+                except Exception as e:
+                    raise HealthCheckError(f"Failed to find available port: {e}")
+            
             runner = web.AppRunner(self.app)
             await runner.setup()
             self._runner = runner
-            site = web.TCPSite(runner, self.host, self.port)
-            await site.start()
-            logger.info(f"Health check server started on {self.host}:{self.port}")
+            
+            try:
+                site = web.TCPSite(runner, self.host, self.port)
+                await site.start()
+                logger.info(f"Health check server started on {self.host}:{self.port}")
+            except OSError as e:
+                if e.errno == 98:  # Address already in use
+                    # Try to find another port
+                    try:
+                        self.port = await self._find_available_port(self.port + 1)
+                        site = web.TCPSite(runner, self.host, self.port)
+                        await site.start()
+                        logger.info(f"Health check server started on alternate port {self.host}:{self.port}")
+                    except Exception as e2:
+                        raise HealthCheckError(f"Failed to start on alternate port: {e2}")
+                else:
+                    raise
+                    
         except Exception as e:
             error_msg = f"Failed to start health check server: {e}"
             logger.error(error_msg)
+            if self._runner:
+                await self._runner.cleanup()
+                self._runner = None
             raise HealthCheckError(error_msg) from e
 
     async def stop(self) -> None:

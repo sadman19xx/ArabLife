@@ -88,32 +88,7 @@ if [ ! -f .env ]; then
     echo "Please edit .env file with your bot settings"
 fi
 
-# Set up systemd service
-echo "Setting up systemd service..."
-sudo tee /etc/systemd/system/arablife-bot.service > /dev/null << EOL
-[Unit]
-Description=ArabLife Discord Bot
-After=network.target
-
-[Service]
-Type=simple
-User=$USER
-WorkingDirectory=$(pwd)
-Environment=PATH=$(pwd)/venv/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
-ExecStart=$(pwd)/venv/bin/python3 bot.py
-Restart=always
-RestartSec=10
-
-[Install]
-WantedBy=multi-user.target
-EOL
-
-# Reload systemd and enable service
-sudo systemctl daemon-reload
-sudo systemctl enable arablife-bot.service
-
 echo "Setup complete!"
 echo "Please edit the .env file with your bot settings"
-echo "Then start the bot with: sudo systemctl start arablife-bot"
-echo "Check status with: sudo systemctl status arablife-bot"
-echo "View logs with: sudo journalctl -u arablife-bot -f"
+echo "Then run the bot with: ./run.sh"
+echo "For production deployment, consider setting up a systemd service"
