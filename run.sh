@@ -3,8 +3,7 @@
 # Function to check if a command exists
 check_command() {
     if ! command -v "$1" &> /dev/null; then
-        echo "Error: $1 is not installed. Please install it first."
-        echo "You can install it with: sudo apt-get install $1"
+        echo "Error: $1 is not installed. Please run ./install.sh first."
         exit 1
     fi
 }
@@ -53,6 +52,7 @@ for dir in "data" "logs" "fonts"; do
     fi
 done
 
-# Use venv python directly instead of activating
+# Activate virtual environment and run bot
 echo "Starting ArabLife bot..."
-exec ./venv/bin/python bot.py
+source venv/bin/activate
+exec python3 bot.py

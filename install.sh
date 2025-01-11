@@ -1,18 +1,25 @@
 #!/bin/bash
 
+# Exit on error
+set -e
+
 # Update package list
 echo "Updating package list..."
 sudo apt-get update
 
-# Check if Python is installed
-if ! command -v python3 &> /dev/null; then
-    echo "Python 3 is not installed. Installing..."
-    sudo apt-get install -y python3
-fi
-
 # Install system dependencies
 echo "Installing system dependencies..."
-sudo apt-get install -y python3-full python3-pip python3-venv ffmpeg
+sudo apt-get install -y \
+    python3 \
+    python3-full \
+    python3-pip \
+    python3-venv \
+    python3-dev \
+    build-essential \
+    ffmpeg \
+    libffi-dev \
+    libnacl-dev \
+    libopus-dev
 
 # Remove old venv if it exists
 if [ -d "venv" ]; then
@@ -42,12 +49,15 @@ fi
 
 # Upgrade pip in the virtual environment
 echo "Upgrading pip..."
-./venv/bin/pip install --upgrade pip
+python3 -m pip install --upgrade pip
 
 # Install dependencies in the virtual environment
 echo "Installing Python dependencies..."
-./venv/bin/pip install wheel
-./venv/bin/pip install -r requirements.txt
+pip install wheel setuptools
+pip install -r requirements.txt || {
+    echo "Failed to install dependencies. Retrying with --no-cache-dir..."
+    pip install --no-cache-dir -r requirements.txt
+}
 
 # Create necessary directories
 echo "Creating necessary directories..."
@@ -77,7 +87,7 @@ GUILD_ID=your_guild_id_here
 
 # Channel IDs
 WELCOME_CHANNEL_ID=0
-WELCOME_VOICE_CHANNEL_ID=0
+WELCOME_VOICE_CHANNEL_ID=1309595750878937240  # Voice channel for welcome sounds
 ROLE_ACTIVITY_LOG_CHANNEL_ID=0
 AUDIT_LOG_CHANNEL_ID=0
 ERROR_LOG_CHANNEL_ID=0
@@ -91,6 +101,8 @@ ROLE_ID_REMOVE_ALLOWED=0
 WELCOME_BACKGROUND_URL=https://i.imgur.com/your_background.png
 WELCOME_MESSAGE=Welcome {user} to {server}! 🎉
 WELCOME_EMBED_COLOR=0x2ecc71
+WELCOME_SOUND_PATH=welcome.mp3
+DEFAULT_VOLUME=0.5
 
 # Security Settings
 RAID_PROTECTION=true
@@ -100,6 +112,13 @@ WARNING_ACTION=timeout
 WARNING_DURATION=3600
 EOL
     echo "Please edit .env file with your configuration"
+fi
+
+# Verify FFmpeg installation
+if ! command -v ffmpeg &> /dev/null; then
+    echo "Error: FFmpeg is not installed properly"
+    echo "Please run: sudo apt-get install -y ffmpeg"
+    exit 1
 fi
 
 echo "Installation complete!"
