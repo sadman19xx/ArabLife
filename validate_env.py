@@ -26,6 +26,10 @@ def validate_env():
         'WELCOME_VOICE_CHANNEL_ID': '1309595750878937240',
         'WELCOME_SOUND_PATH': 'welcome.mp3',
         'DEFAULT_VOLUME': '0.5',
+        'LOG_TO_FILE': '1',
+        'LOG_LEVEL': 'INFO',
+        'LOG_FORMAT': '%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+        'LOG_DIR': 'logs',
         'AUTOMOD_ENABLED': '1',
         'AUTOMOD_ACTION': 'warn',
         'AUTOMOD_SPAM_THRESHOLD': '5',
@@ -37,6 +41,14 @@ def validate_env():
         'HEALTH_CHECK_HOST': '127.0.0.1',
         'HEALTH_CHECK_PORT': '8080',
         'HEALTH_CHECK_METRICS_COOLDOWN': '60'
+    }
+    
+    # Optional channel IDs (will be 0 if not set)
+    channel_vars = {
+        'ROLE_ACTIVITY_LOG_CHANNEL_ID': 'Channel for role change logs',
+        'AUDIT_LOG_CHANNEL_ID': 'Channel for audit logs',
+        'ERROR_LOG_CHANNEL_ID': 'Channel for error logs',
+        'LEVEL_UP_CHANNEL_ID': 'Channel for level up announcements'
     }
     
     # Print current configuration
@@ -62,6 +74,13 @@ def validate_env():
     for var, default in optional_vars.items():
         value = os.getenv(var, default)
         print(f"{var}: {value}")
+    
+    # Print channel IDs
+    print("\nChannel Settings:")
+    print("================")
+    for var, desc in channel_vars.items():
+        value = os.getenv(var, '0')
+        print(f"{var}: {value} ({desc})")
     
     # Report missing required variables
     if missing:
@@ -100,6 +119,14 @@ def validate_env():
         else:
             print(f"⚠️  Arabic font not found: {font_path}")
             print("   Arabic text rendering will not work until you add this file")
+        
+        # Check log directory
+        log_dir = os.getenv('LOG_DIR', 'logs')
+        if os.path.exists(log_dir):
+            print(f"✅ Log directory found: {log_dir}")
+        else:
+            print(f"⚠️  Log directory not found: {log_dir}")
+            print("   Will be created automatically when needed")
 
 if __name__ == '__main__':
     validate_env()

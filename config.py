@@ -18,7 +18,11 @@ class Config:
     WELCOME_SOUND_PATH = os.getenv('WELCOME_SOUND_PATH', 'welcome.mp3')
     DEFAULT_VOLUME = float(os.getenv('DEFAULT_VOLUME', 0.5))
     
-    # Logging channels
+    # Logging settings
+    LOG_TO_FILE = bool(int(os.getenv('LOG_TO_FILE', 1)))
+    LOG_LEVEL = os.getenv('LOG_LEVEL', 'INFO')
+    LOG_FORMAT = os.getenv('LOG_FORMAT', '%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+    LOG_DIR = os.getenv('LOG_DIR', 'logs')
     ROLE_ACTIVITY_LOG_CHANNEL_ID = int(os.getenv('ROLE_ACTIVITY_LOG_CHANNEL_ID', 0))
     AUDIT_LOG_CHANNEL_ID = int(os.getenv('AUDIT_LOG_CHANNEL_ID', 0))
     ERROR_LOG_CHANNEL_ID = int(os.getenv('ERROR_LOG_CHANNEL_ID', 0))
@@ -66,3 +70,7 @@ class Config:
         font_path = os.path.join('fonts', 'arabic.ttf')
         if not os.path.exists(font_path):
             raise ValueError(f"Arabic font file not found: {font_path}")
+            
+        # Create log directory if logging to file
+        if cls.LOG_TO_FILE:
+            os.makedirs(cls.LOG_DIR, exist_ok=True)
