@@ -335,11 +335,16 @@ class AutoModCommands(Cog):
         description="Add/remove role or channel exemption from AutoMod"
     )
     @app_commands.checks.has_permissions(administrator=True)
+    @app_commands.describe(
+        action="Whether to add or remove from exemption list",
+        target="The role or channel to exempt"
+    )
     async def manage_exempt(
         self,
         interaction: discord.Interaction,
         action: Literal["add", "remove"],
-        target: Union[discord.Role, discord.abc.GuildChannel]
+        target: Union[discord.Role, discord.app_commands.AppCommandChannel],
+        channel_types=[discord.ChannelType.text]
     ):
         """Manage AutoMod exemptions"""
         try:
