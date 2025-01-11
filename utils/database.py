@@ -152,11 +152,15 @@ class Database:
                     guild_id TEXT NOT NULL,
                     channel_id TEXT NOT NULL,
                     user_id TEXT NOT NULL,
+                    ticket_type TEXT NOT NULL,
                     status TEXT DEFAULT 'open',
                     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
                     closed_at DATETIME,
+                    last_activity DATETIME DEFAULT CURRENT_TIMESTAMP,
                     FOREIGN KEY(guild_id) REFERENCES guilds(id) ON DELETE CASCADE
                 );
+                CREATE INDEX IF NOT EXISTS idx_tickets_guild_user ON tickets(guild_id, user_id);
+                CREATE INDEX IF NOT EXISTS idx_tickets_status ON tickets(status);
                 
                 -- Ticket messages table
                 CREATE TABLE IF NOT EXISTS ticket_messages (
@@ -167,6 +171,69 @@ class Database:
                     timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
                     FOREIGN KEY(ticket_id) REFERENCES tickets(id) ON DELETE CASCADE
                 );
+                CREATE INDEX IF NOT EXISTS idx_ticket_messages_ticket ON ticket_messages(ticket_id);
+
+                -- User warnings table
+                CREATE TABLE IF NOT EXISTS warnings (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    guild_id TEXT NOT NULL,
+                    user_id TEXT NOT NULL,
+                    moderator_id TEXT NOT NULL,
+                    reason TEXT,
+                    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                    expires_at DATETIME,
+                    active BOOLEAN DEFAULT 1,
+                    FOREIGN KEY(guild_id) REFERENCES guilds(id) ON DELETE CASCADE
+                );
+                CREATE INDEX IF NOT EXISTS idx_warnings_guild_user ON warnings(guild_id, user_id);
+                CREATE INDEX IF NOT EXISTS idx_warnings_active ON warnings(active);
+
+                -- User roles tracking table
+                CREATE TABLE IF NOT EXISTS user_roles (
+                    guild_id TEXT NOT NULL,
+                    user_id TEXT NOT NULL,
+                    role_id TEXT NOT NULL,
+                    assigned_by TEXT NOT NULL,
+                    assigned_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                    PRIMARY KEY (guild_id, user_id, role_id),
+                    FOREIGN KEY(guild_id) REFERENCES guilds(id) ON DELETE CASCADE
+                );
+                CREATE INDEX IF NOT EXISTS idx_user_roles_guild ON user_roles(guild_id);
+
+                -- Command usage tracking table
+                CREATE TABLE IF NOT EXISTS command_usage (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    guild_id TEXT NOT NULL,
+                    user_id TEXT NOT NULL,
+                    command_name TEXT NOT NULL,
+                    used_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                    success BOOLEAN DEFAULT 1,
+                    error_message TEXT,
+                    FOREIGN KEY(guild_id) REFERENCES guilds(id) ON DELETE CASCADE
+                );
+                CREATE INDEX IF NOT EXISTS idx_command_usage_guild ON command_usage(guild_id);
+                CREATE INDEX IF NOT EXISTS idx_command_usage_user ON command_usage(user_id);
+
+                -- Security settings table
+                CREATE TABLE IF NOT EXISTS security_settings (
+                    guild_id TEXT PRIMARY KEY,
+                    settings TEXT NOT NULL,
+                    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                    FOREIGN KEY(guild_id) REFERENCES guilds(id) ON DELETE CASCADE
+                );
+
+                -- Blacklisted words table
+                CREATE TABLE IF NOT EXISTS blacklisted_words (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    guild_id TEXT NOT NULL,
+                    word TEXT NOT NULL,
+                    added_by TEXT NOT NULL,
+                    added_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                    FOREIGN KEY(guild_id) REFERENCES guilds(id) ON DELETE CASCADE,
+                    UNIQUE(guild_id, word)
+                );
+                CREATE INDEX IF NOT EXISTS idx_blacklisted_words_guild ON blacklisted_words(guild_id);
             """)
             await conn.commit()
 

@@ -28,13 +28,12 @@ class AutoModCommands(Cog):
 
     async def get_settings(self, guild_id: str) -> dict:
         """Get automod settings for a guild"""
-        async with aiosqlite.connect(db.db_path) as conn:
-            conn.row_factory = aiosqlite.Row
-            async with conn.execute("""
-                SELECT * FROM automod_settings
+        async with db.transaction() as cursor:
+            await cursor.execute("""
+                SELECT settings FROM automod_settings
                 WHERE guild_id = ?
-            """, (guild_id,)) as cursor:
-                settings = await cursor.fetchone()
+            """, (guild_id,))
+            settings = await cursor.fetchone()
                 
             if not settings:
                 # Create default settings
@@ -65,13 +64,12 @@ class AutoModCommands(Cog):
 
     async def update_settings(self, guild_id: str, settings: dict):
         """Update automod settings for a guild"""
-        async with aiosqlite.connect(db.db_path) as conn:
-            await conn.execute("""
+        async with db.transaction() as cursor:
+            await cursor.execute("""
                 UPDATE automod_settings
-                SET settings = ?
+                SET settings = ?, updated_at = CURRENT_TIMESTAMP
                 WHERE guild_id = ?
             """, (json.dumps(settings), guild_id))
-            await conn.commit()
 
     async def log_action(self, guild_id: int, user_id: int, action: str, reason: str):
         """Log automod action to database"""
@@ -290,6 +288,7 @@ class AutoModCommands(Cog):
         description="Enable or disable AutoMod"
     )
     @app_commands.checks.has_permissions(administrator=True)
+    @app_commands.checks.cooldown(1, 30)  # 30 second cooldown
     async def automod_toggle(
         self,
         interaction: discord.Interaction,
@@ -410,6 +409,7 @@ class AutoModCommands(Cog):
         description="Add/remove banned word or phrase (supports wildcards)"
     )
     @app_commands.checks.has_permissions(administrator=True)
+    @app_commands.checks.cooldown(1, 5)  # 5 second cooldown
     async def manage_words(
         self,
         interaction: discord.Interaction,
@@ -420,28 +420,33 @@ class AutoModCommands(Cog):
         try:
             settings = await self.get_settings(str(interaction.guild_id))
             
-            if action == "add":
-                if word not in settings['banned_words']:
-                    settings['banned_words'].append(word)
-                    action_text = "إضافة"
+            async with db.transaction() as cursor:
+                if action == "add":
+                    try:
+                        await cursor.execute("""
+                            INSERT INTO blacklisted_words (guild_id, word, added_by)
+                            VALUES (?, ?, ?)
+                        """, (str(interaction.guild_id), word.lower(), str(interaction.user.id)))
+                        action_text = "إضافة"
+                    except aiosqlite.IntegrityError:
+                        await interaction.response.send_message(
+                            "*هذه الكلمة محظورة بالفعل.*",
+                            ephemeral=True
+                        )
+                        return
                 else:
-                    await interaction.response.send_message(
-                        "*هذه الكلمة محظورة بالفعل.*",
-                        ephemeral=True
-                    )
-                    return
-            else:
-                if word in settings['banned_words']:
-                    settings['banned_words'].remove(word)
-                    action_text = "إزالة"
-                else:
-                    await interaction.response.send_message(
-                        "*هذه الكلمة غير موجودة في القائمة المحظورة.*",
-                        ephemeral=True
-                    )
-                    return
-                    
-            await self.update_settings(str(interaction.guild_id), settings)
+                    await cursor.execute("""
+                        DELETE FROM blacklisted_words
+                        WHERE guild_id = ? AND word = ?
+                    """, (str(interaction.guild_id), word.lower()))
+                    if cursor.rowcount > 0:
+                        action_text = "إزالة"
+                    else:
+                        await interaction.response.send_message(
+                            "*هذه الكلمة غير موجودة في القائمة المحظورة.*",
+                            ephemeral=True
+                        )
+                        return
             
             await interaction.response.send_message(
                 f"*تم {action_text} '{word}' من الكلمات المحظورة.*"
@@ -506,6 +511,7 @@ class AutoModCommands(Cog):
         description="Show current AutoMod settings"
     )
     @app_commands.checks.has_permissions(administrator=True)
+    @app_commands.checks.cooldown(1, 10)  # 10 second cooldown
     async def automod_status(self, interaction: discord.Interaction):
         """Show current AutoMod settings"""
         try:
@@ -584,16 +590,15 @@ class AutoModCommands(Cog):
             )
             
             # Recent actions
-            async with aiosqlite.connect(db.db_path) as conn:
-                conn.row_factory = aiosqlite.Row
-                async with conn.execute("""
+            async with db.transaction() as cursor:
+                await cursor.execute("""
                     SELECT action, reason, timestamp
                     FROM automod_logs
                     WHERE guild_id = ?
                     ORDER BY timestamp DESC
                     LIMIT 5
-                """, (str(interaction.guild_id),)) as cursor:
-                    recent_actions = await cursor.fetchall()
+                """, (str(interaction.guild_id),))
+                recent_actions = await cursor.fetchall()
             
             if recent_actions:
                 actions_text = "\n".join(

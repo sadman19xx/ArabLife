@@ -13,12 +13,50 @@ class RoleCommands(Cog):
     def __init__(self, bot):
         self.bot = bot
         self._role_cache = {}
-        self.visa_image_url = "https://i.imgur.com/XYZ123.png"  # Replace with your actual image URL
+        self.visa_image_url = Config.VISA_IMAGE_URL
+        
+    async def _check_rate_limit(self, interaction: discord.Interaction) -> bool:
+        """Check if user has exceeded rate limit"""
+        async with self.bot.db.transaction() as cursor:
+            # Get recent command usage
+            await cursor.execute("""
+                SELECT COUNT(*) FROM command_usage 
+                WHERE guild_id = ? AND user_id = ? AND command_name = ? 
+                AND used_at > datetime('now', '-1 minute')
+            """, (str(interaction.guild_id), str(interaction.user.id), interaction.command.name))
+            count = (await cursor.fetchone())[0]
+            
+            # Log command usage
+            await cursor.execute("""
+                INSERT INTO command_usage (guild_id, user_id, command_name)
+                VALUES (?, ?, ?)
+            """, (str(interaction.guild_id), str(interaction.user.id), interaction.command.name))
+            
+            return count < Config.ROLE_COMMAND_COOLDOWN
+            
+    async def _track_role_change(self, guild_id: int, user_id: int, role_id: int, assigned_by: int, is_add: bool):
+        """Track role changes in database"""
+        async with self.bot.db.transaction() as cursor:
+            if is_add:
+                await cursor.execute("""
+                    INSERT OR REPLACE INTO user_roles (guild_id, user_id, role_id, assigned_by)
+                    VALUES (?, ?, ?, ?)
+                """, (str(guild_id), str(user_id), str(role_id), str(assigned_by)))
+            else:
+                await cursor.execute("""
+                    DELETE FROM user_roles 
+                    WHERE guild_id = ? AND user_id = ? AND role_id = ?
+                """, (str(guild_id), str(user_id), str(role_id)))
 
-    def _check_role_hierarchy(self, interaction_or_ctx, member):
+    async def _check_role_hierarchy(self, interaction_or_ctx, member):
         """Check if the bot's role is high enough to manage the target member's roles"""
         guild = interaction_or_ctx.guild if isinstance(interaction_or_ctx, discord.Interaction) else interaction_or_ctx.guild
         bot_member = guild.get_member(self.bot.user.id)
+        
+        # Check if member has exempt role
+        if any(role.id in Config.EXEMPT_ROLES for role in member.roles):
+            return False
+            
         return bot_member.top_role > member.top_role
 
     def _get_role(self, guild_id):
@@ -72,8 +110,20 @@ class RoleCommands(Cog):
         description='Give visa role to a member'
     )
     @app_commands.checks.has_permissions(manage_roles=True)
-    @app_commands.checks.cooldown(1, Config.ROLE_COMMAND_COOLDOWN)
     async def give_role(self, interaction: discord.Interaction, member: discord.Member):
+        """Give the specified role to a member"""
+        # Input validation
+        if member.bot:
+            await interaction.response.send_message('*لا يمكن إعطاء التأشيرة للبوتات.*', ephemeral=True)
+            return
+            
+        # Rate limit check
+        if not await self._check_rate_limit(interaction):
+            await interaction.response.send_message(
+                f'*الرجاء الانتظار {Config.ROLE_COMMAND_COOLDOWN} ثواني.*',
+                ephemeral=True
+            )
+            return
         """Give the specified role to a member"""
         # Security checks
         if not self._check_role_hierarchy(interaction, member):
@@ -92,6 +142,15 @@ class RoleCommands(Cog):
         try:
             await member.add_roles(role)
             dm_sent = await self.send_visa_dm(member, "granted")
+            
+            # Track role assignment
+            await self._track_role_change(
+                interaction.guild_id,
+                member.id,
+                role.id,
+                interaction.user.id,
+                True
+            )
             
             response = '*تم أصدار التاشيرة بنجاح.*'
             if not dm_sent:
@@ -131,6 +190,15 @@ class RoleCommands(Cog):
         try:
             await member.remove_roles(role)
             dm_sent = await self.send_visa_dm(member, "revoked")
+            
+            # Track role removal
+            await self._track_role_change(
+                interaction.guild_id,
+                member.id,
+                role.id,
+                interaction.user.id,
+                False
+            )
             
             response = '*تم الغاء التاشيرة بنجاح.*'
             if not dm_sent:

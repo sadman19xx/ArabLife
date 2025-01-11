@@ -196,12 +196,36 @@ class SecurityCommands(Cog, LoggerMixin):
         # Check mentions
         if len(message.mentions) > settings['max_mentions']:
             await message.delete()
-            await self.warn_user(message.author, message.guild, "mass mentions")
+            await self.warn_user(message.author, message.guild, "mass mentions", message.author.id)
             await message.channel.send(
                 f"{message.author.mention} Too many mentions!",
                 delete_after=10
             )
             return
+
+        # Check blacklisted words
+        async with db.transaction() as cursor:
+            await cursor.execute("""
+                SELECT word FROM blacklisted_words
+                WHERE guild_id = ?
+            """, (str(message.guild.id),))
+            blacklisted = await cursor.fetchall()
+            
+        content_lower = message.content.lower()
+        for (word,) in blacklisted:
+            if word.lower() in content_lower:
+                await message.delete()
+                await self.warn_user(
+                    message.author,
+                    message.guild,
+                    f"blacklisted word: {word}",
+                    message.author.id
+                )
+                await message.channel.send(
+                    f"{message.author.mention} That word is not allowed!",
+                    delete_after=10
+                )
+                return
 
         # Check links
         urls = re.findall(r'http[s]?://(?:[a-zA-Z]|[0-9]|[$-_@.&+]|[!*(),]|(?:%[0-9a-fA-F][0-9a-fA-F]))+', message.content)
@@ -226,22 +250,38 @@ class SecurityCommands(Cog, LoggerMixin):
             )
             return
 
-    async def warn_user(self, member: discord.Member, guild: discord.Guild, reason: str):
+    async def warn_user(self, member: discord.Member, guild: discord.Guild, reason: str, moderator_id: int):
         """Handle user warnings and punishments"""
         settings = await self.get_guild_settings(str(guild.id))
         
         async with db.transaction() as cursor:
-            # Add warning to database
+            # Clean expired warnings
             await cursor.execute("""
-                INSERT INTO warnings (guild_id, user_id, reason, timestamp)
-                VALUES (?, ?, ?, CURRENT_TIMESTAMP)
-            """, (str(guild.id), str(member.id), reason))
+                UPDATE warnings 
+                SET active = 0
+                WHERE guild_id = ? 
+                AND user_id = ?
+                AND expires_at < CURRENT_TIMESTAMP
+            """, (str(guild.id), str(member.id)))
+
+            # Add new warning
+            await cursor.execute("""
+                INSERT INTO warnings (
+                    guild_id, user_id, moderator_id, reason, 
+                    created_at, expires_at, active
+                )
+                VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP, 
+                    datetime('now', '+' || ? || ' days'), 1)
+            """, (
+                str(guild.id), str(member.id), str(moderator_id),
+                reason, settings['warning_expire_days']
+            ))
             
             # Get warning count
             await cursor.execute("""
                 SELECT COUNT(*) FROM warnings
                 WHERE guild_id = ? AND user_id = ?
-                AND timestamp > datetime('now', '-30 days')
+                AND active = 1
             """, (str(guild.id), str(member.id)))
             warning_count = (await cursor.fetchone())[0]
         
@@ -297,6 +337,7 @@ class SecurityCommands(Cog, LoggerMixin):
         description="Clear warnings for a user"
     )
     @app_commands.checks.has_permissions(administrator=True)
+    @app_commands.checks.cooldown(1, 30)  # 30 second cooldown
     async def clear_warnings(
         self,
         interaction: discord.Interaction,
@@ -324,6 +365,7 @@ class SecurityCommands(Cog, LoggerMixin):
         description="Check warnings for a user"
     )
     @app_commands.checks.has_permissions(administrator=True)
+    @app_commands.checks.cooldown(1, 10)  # 10 second cooldown
     async def warnings(
         self,
         interaction: discord.Interaction,
@@ -374,6 +416,7 @@ class SecurityCommands(Cog, LoggerMixin):
         description="Manually toggle raid mode"
     )
     @app_commands.checks.has_permissions(administrator=True)
+    @app_commands.checks.cooldown(1, 60)  # 60 second cooldown
     async def toggle_raid_mode(
         self,
         interaction: discord.Interaction,
@@ -426,6 +469,58 @@ class SecurityCommands(Cog, LoggerMixin):
                     "❌ Failed to disable raid mode: Missing permissions",
                     ephemeral=True
                 )
+
+    @app_commands.command(
+        name="blacklist",
+        description="Add or remove a word from the blacklist"
+    )
+    @app_commands.checks.has_permissions(administrator=True)
+    @app_commands.checks.cooldown(1, 5)  # 5 second cooldown
+    async def manage_blacklist(
+        self,
+        interaction: discord.Interaction,
+        action: str,
+        word: str
+    ):
+        """Manage blacklisted words"""
+        if action not in ['add', 'remove']:
+            await interaction.response.send_message(
+                "Invalid action. Use 'add' or 'remove'.",
+                ephemeral=True
+            )
+            return
+            
+        async with db.transaction() as cursor:
+            if action == 'add':
+                try:
+                    await cursor.execute("""
+                        INSERT INTO blacklisted_words (guild_id, word, added_by)
+                        VALUES (?, ?, ?)
+                    """, (str(interaction.guild_id), word.lower(), str(interaction.user.id)))
+                    await interaction.response.send_message(
+                        f"Added '{word}' to blacklist.",
+                        ephemeral=True
+                    )
+                except aiosqlite.IntegrityError:
+                    await interaction.response.send_message(
+                        f"'{word}' is already blacklisted.",
+                        ephemeral=True
+                    )
+            else:
+                await cursor.execute("""
+                    DELETE FROM blacklisted_words
+                    WHERE guild_id = ? AND word = ?
+                """, (str(interaction.guild_id), word.lower()))
+                if cursor.rowcount > 0:
+                    await interaction.response.send_message(
+                        f"Removed '{word}' from blacklist.",
+                        ephemeral=True
+                    )
+                else:
+                    await interaction.response.send_message(
+                        f"'{word}' is not in the blacklist.",
+                        ephemeral=True
+                    )
 
     async def cog_app_command_error(self, interaction: discord.Interaction, error: app_commands.AppCommandError):
         """Error handler for application commands"""

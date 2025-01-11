@@ -1,4 +1,6 @@
 import os
+import json
+import shutil
 from dotenv import load_dotenv
 
 # Load environment variables
@@ -34,6 +36,14 @@ class Config:
     WELCOME_SOUND_PATH = os.getenv('WELCOME_SOUND_PATH', None)  # Optional welcome sound
     DEFAULT_VOLUME = float(os.getenv('DEFAULT_VOLUME', '0.5'))
     FFMPEG_PATH = os.getenv('FFMPEG_PATH', None)  # Optional custom FFmpeg path
+    
+    # Parse JSON settings with error handling
+    try:
+        ROLE_REWARDS = json.loads(os.getenv('ROLE_REWARDS', '{}'))
+        CHANNEL_MULTIPLIERS = json.loads(os.getenv('CHANNEL_MULTIPLIERS', '{}'))
+        ROLE_MULTIPLIERS = json.loads(os.getenv('ROLE_MULTIPLIERS', '{}'))
+    except json.JSONDecodeError as e:
+        raise ValueError(f"Invalid JSON format in environment variables: {str(e)}")
     
     # Command cooldowns (in seconds)
     ROLE_COMMAND_COOLDOWN = int(os.getenv('ROLE_COMMAND_COOLDOWN', '5'))
@@ -132,16 +142,36 @@ class Config:
         if not cls.ROLE_IDS_ALLOWED or cls.ROLE_IDS_ALLOWED == ['']:
             raise ValueError("At least one allowed role ID must be configured")
 
-        # Validate FFmpeg path for Unix systems
-        default_ffmpeg = '/usr/bin/ffmpeg'
+        # Validate FFmpeg path
         if not cls.FFMPEG_PATH:
-            cls.FFMPEG_PATH = default_ffmpeg
-        
-        # Convert Windows path to Unix if needed
-        cls.FFMPEG_PATH = cls.FFMPEG_PATH.replace('\\', '/').replace('C:', '')
-        
-        if not os.path.isfile(cls.FFMPEG_PATH):
-            raise ValueError(f"FFmpeg not found at path: {cls.FFMPEG_PATH}. Please install FFmpeg with: sudo apt install -y ffmpeg")
+            # Default paths based on OS
+            if os.name == 'nt':  # Windows
+                default_paths = [
+                    r'C:\Program Files\ffmpeg\bin\ffmpeg.exe',
+                    r'C:\Program Files (x86)\ffmpeg\bin\ffmpeg.exe',
+                    r'ffmpeg.exe'  # If in PATH
+                ]
+            else:  # Unix/Linux
+                default_paths = [
+                    '/usr/bin/ffmpeg',
+                    '/usr/local/bin/ffmpeg',
+                    'ffmpeg'  # If in PATH
+                ]
+                
+            # Try to find ffmpeg in default locations
+            for path in default_paths:
+                if os.path.isfile(path) or shutil.which(path):
+                    cls.FFMPEG_PATH = path
+                    break
+            else:
+                if os.name == 'nt':
+                    raise ValueError("FFmpeg not found. Please install FFmpeg and add it to PATH or set FFMPEG_PATH in .env")
+                else:
+                    raise ValueError("FFmpeg not found. Please install FFmpeg with: sudo apt install -y ffmpeg")
+        else:
+            # Validate custom path
+            if not os.path.isfile(cls.FFMPEG_PATH) and not shutil.which(cls.FFMPEG_PATH):
+                raise ValueError(f"FFmpeg not found at path: {cls.FFMPEG_PATH}")
 
         # Validate ticket settings if staff role is set
         if cls.TICKET_STAFF_ROLE_ID != 0:
