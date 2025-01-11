@@ -32,6 +32,7 @@ class ArabLifeBot(commands.Bot):
         self.cog_load_order: List[str] = []
         self.command_stats: Dict[str, int] = defaultdict(int)  # Track command usage
         self.error_count: int = 0  # Track error count
+        self.db = db  # Make database accessible to cogs
         
         super().__init__(
             command_prefix=self.get_prefix,
@@ -51,12 +52,6 @@ class ArabLifeBot(commands.Bot):
             port=Config.HEALTH_CHECK_PORT,
             metrics_cooldown=Config.HEALTH_CHECK_METRICS_COOLDOWN
         )  # Health check server
-        self.cog_dependencies = {
-            'cogs.leveling_commands': ['utils.database'],
-            'cogs.automod_commands': ['utils.database'],
-            'cogs.ticket_commands': ['utils.database'],
-            'cogs.custom_commands': ['utils.database']
-        }
         
         # List of cogs to load
         self.initial_extensions = [
@@ -87,7 +82,7 @@ class ArabLifeBot(commands.Bot):
             
         try:
             # Get prefix from database
-            async with db.transaction() as cursor:
+            async with self.db.transaction() as cursor:
                 await cursor.execute("""
                     SELECT prefix FROM bot_settings WHERE guild_id = ?
                 """, (str(message.guild.id),))
@@ -101,35 +96,23 @@ class ArabLifeBot(commands.Bot):
             logging.error(f"Error fetching prefix for guild {message.guild.id}: {e}")
             return "!"  # Fallback to default prefix on error
 
-    async def load_extension_with_dependencies(self, extension: str) -> None:
-        """Load an extension after its dependencies"""
-        if extension in self.cog_load_order:
-            return
-            
-        # Load dependencies first
-        if extension in self.cog_dependencies:
-            for dependency in self.cog_dependencies[extension]:
-                await self.load_extension_with_dependencies(dependency)
-                
-        try:
-            await self.load_extension(extension)
-            self.cog_load_order.append(extension)
-            print(f'Loaded extension: {extension}')
-        except Exception as e:
-            print(f'Failed to load extension {extension}: {str(e)}')
-            traceback.print_exc()
-
     async def setup_hook(self) -> None:
         """Initialize bot setup"""
         # Initialize database
-        await db.init()
+        await self.db.init()
         
         # Start health check server
         await self.health_server.start()
         
-        # Load extensions in dependency order
+        # Load extensions
         for extension in self.initial_extensions:
-            await self.load_extension_with_dependencies(extension)
+            try:
+                await self.load_extension(extension)
+                self.cog_load_order.append(extension)
+                print(f'Loaded extension: {extension}')
+            except Exception as e:
+                print(f'Failed to load extension {extension}: {str(e)}')
+                traceback.print_exc()
 
         # Register persistent views for tickets
         from cogs.ticket_commands import TicketView, StaffView
@@ -169,7 +152,7 @@ class ArabLifeBot(commands.Bot):
         # Initialize database for each guild
         for guild in self.guilds:
             try:
-                async with db.transaction() as cursor:
+                async with self.db.transaction() as cursor:
                     # Insert guild if not exists
                     await cursor.execute("""
                         INSERT OR IGNORE INTO guilds (id, name, owner_id, member_count)
@@ -188,7 +171,7 @@ class ArabLifeBot(commands.Bot):
         """Event triggered when the bot joins a new guild"""
         try:
             # Initialize database for new guild
-            async with db.transaction() as cursor:
+            async with self.db.transaction() as cursor:
                 await cursor.execute("""
                     INSERT OR IGNORE INTO guilds (id, name, owner_id, member_count)
                     VALUES (?, ?, ?, ?)
@@ -249,7 +232,7 @@ class ArabLifeBot(commands.Bot):
         elif isinstance(error, commands.CommandNotFound):
             # Check for custom command
             if ctx.guild:
-                async with db.transaction() as cursor:
+                async with self.db.transaction() as cursor:
                     await cursor.execute("""
                         SELECT response FROM custom_commands 
                         WHERE guild_id = ? AND name = ?
@@ -288,7 +271,7 @@ class ArabLifeBot(commands.Bot):
         print("Bot is shutting down...")
         
         # Close database connections
-        await db.close()
+        await self.db.close()
         
         # Stop health check server
         await self.health_server.stop()

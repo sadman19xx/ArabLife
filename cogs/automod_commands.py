@@ -51,16 +51,15 @@ class AutoModCommands(Cog):
                     "is_enabled": Config.AUTOMOD_ENABLED
                 }
                 
-                await conn.execute("""
+                await cursor.execute("""
                     INSERT INTO automod_settings (
                         guild_id, settings
                     ) VALUES (?, ?)
                 """, (guild_id, json.dumps(default_settings)))
-                await conn.commit()
                 
                 return default_settings
                 
-            return json.loads(settings['settings'])
+            return json.loads(settings[0])
 
     async def update_settings(self, guild_id: str, settings: dict):
         """Update automod settings for a guild"""
@@ -74,22 +73,11 @@ class AutoModCommands(Cog):
     async def log_action(self, guild_id: int, user_id: int, action: str, reason: str):
         """Log automod action to database"""
         try:
-            async with aiosqlite.connect(db.db_path) as conn:
-                # Get guild's database ID
-                async with conn.execute(
-                    'SELECT id FROM guilds WHERE discord_id = ?',
-                    (str(guild_id),)
-                ) as cursor:
-                    guild_result = await cursor.fetchone()
-                    if not guild_result:
-                        return
-                    db_guild_id = guild_result[0]
-                
-                await conn.execute('''
+            async with db.transaction() as cursor:
+                await cursor.execute('''
                     INSERT INTO automod_logs (guild_id, user_id, action, reason, timestamp)
                     VALUES (?, ?, ?, ?, ?)
-                ''', (db_guild_id, user_id, action, reason, datetime.now().isoformat()))
-                await conn.commit()
+                ''', (str(guild_id), str(user_id), action, reason, datetime.now().isoformat()))
         except Exception as e:
             logger.error(f"Failed to log action: {str(e)}")
 
@@ -351,7 +339,7 @@ class AutoModCommands(Cog):
         self,
         interaction: discord.Interaction,
         action: Literal["add", "remove"],
-        target: Union[discord.Role, discord.TextChannel]
+        target: Union[discord.Role, discord.abc.GuildChannel]
     ):
         """Manage AutoMod exemptions"""
         try:
@@ -420,33 +408,28 @@ class AutoModCommands(Cog):
         try:
             settings = await self.get_settings(str(interaction.guild_id))
             
-            async with db.transaction() as cursor:
-                if action == "add":
-                    try:
-                        await cursor.execute("""
-                            INSERT INTO blacklisted_words (guild_id, word, added_by)
-                            VALUES (?, ?, ?)
-                        """, (str(interaction.guild_id), word.lower(), str(interaction.user.id)))
-                        action_text = "إضافة"
-                    except aiosqlite.IntegrityError:
-                        await interaction.response.send_message(
-                            "*هذه الكلمة محظورة بالفعل.*",
-                            ephemeral=True
-                        )
-                        return
+            if action == "add":
+                if word not in settings['banned_words']:
+                    settings['banned_words'].append(word)
+                    action_text = "إضافة"
                 else:
-                    await cursor.execute("""
-                        DELETE FROM blacklisted_words
-                        WHERE guild_id = ? AND word = ?
-                    """, (str(interaction.guild_id), word.lower()))
-                    if cursor.rowcount > 0:
-                        action_text = "إزالة"
-                    else:
-                        await interaction.response.send_message(
-                            "*هذه الكلمة غير موجودة في القائمة المحظورة.*",
-                            ephemeral=True
-                        )
-                        return
+                    await interaction.response.send_message(
+                        "*هذه الكلمة محظورة بالفعل.*",
+                        ephemeral=True
+                    )
+                    return
+            else:
+                if word in settings['banned_words']:
+                    settings['banned_words'].remove(word)
+                    action_text = "إزالة"
+                else:
+                    await interaction.response.send_message(
+                        "*هذه الكلمة غير موجودة في القائمة المحظورة.*",
+                        ephemeral=True
+                    )
+                    return
+                    
+            await self.update_settings(str(interaction.guild_id), settings)
             
             await interaction.response.send_message(
                 f"*تم {action_text} '{word}' من الكلمات المحظورة.*"
@@ -588,28 +571,6 @@ class AutoModCommands(Cog):
                 value=banned_links,
                 inline=False
             )
-            
-            # Recent actions
-            async with db.transaction() as cursor:
-                await cursor.execute("""
-                    SELECT action, reason, timestamp
-                    FROM automod_logs
-                    WHERE guild_id = ?
-                    ORDER BY timestamp DESC
-                    LIMIT 5
-                """, (str(interaction.guild_id),))
-                recent_actions = await cursor.fetchall()
-            
-            if recent_actions:
-                actions_text = "\n".join(
-                    f"{action.title()}: {reason} ({timestamp.split('T')[0]})"
-                    for action, reason, timestamp in recent_actions
-                )
-                embed.add_field(
-                    name="الإجراءات الأخيرة",
-                    value=actions_text,
-                    inline=False
-                )
             
             await interaction.response.send_message(embed=embed)
             
