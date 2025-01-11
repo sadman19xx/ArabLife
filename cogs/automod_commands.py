@@ -337,17 +337,32 @@ class AutoModCommands(Cog):
     @app_commands.checks.has_permissions(administrator=True)
     @app_commands.describe(
         action="Whether to add or remove from exemption list",
-        target="The role or channel to exempt"
+        role="The role to exempt",
+        channel="The channel to exempt"
     )
     async def manage_exempt(
         self,
         interaction: discord.Interaction,
         action: Literal["add", "remove"],
-        target: Union[discord.Role, discord.TextChannel, discord.ForumChannel]
+        role: Optional[discord.Role] = None,
+        channel: Optional[Union[discord.TextChannel, discord.ForumChannel]] = None
     ):
         """Manage AutoMod exemptions"""
-        if isinstance(target, (discord.TextChannel, discord.ForumChannel)):
-            pass  # Both channel types are valid
+        if not role and not channel:
+            await interaction.response.send_message(
+                "*يجب تحديد رتبة أو قناة.*",
+                ephemeral=True
+            )
+            return
+            
+        if role and channel:
+            await interaction.response.send_message(
+                "*يرجى تحديد رتبة أو قناة واحدة فقط.*",
+                ephemeral=True
+            )
+            return
+            
+        target = role or channel
                 
         try:
             settings = await self.get_settings(str(interaction.guild_id))
