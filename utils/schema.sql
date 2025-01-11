@@ -18,33 +18,6 @@ CREATE TABLE IF NOT EXISTS bot_settings (
     FOREIGN KEY(guild_id) REFERENCES guilds(id) ON DELETE CASCADE
 );
 
--- User levels table
-CREATE TABLE IF NOT EXISTS user_levels (
-    guild_id TEXT,
-    user_id TEXT,
-    xp INTEGER DEFAULT 0,
-    level INTEGER DEFAULT 0,
-    last_message_time DATETIME,
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-    PRIMARY KEY (guild_id, user_id),
-    FOREIGN KEY(guild_id) REFERENCES guilds(id) ON DELETE CASCADE
-);
-
--- Leveling settings table
-CREATE TABLE IF NOT EXISTS leveling_settings (
-    guild_id TEXT PRIMARY KEY,
-    xp_per_message INTEGER DEFAULT 15,
-    xp_cooldown INTEGER DEFAULT 60,
-    level_up_channel_id TEXT,
-    level_up_message TEXT,
-    role_rewards TEXT DEFAULT '{}',
-    channel_multipliers TEXT DEFAULT '{}',
-    role_multipliers TEXT DEFAULT '{}',
-    leveling_enabled BOOLEAN DEFAULT 1,
-    FOREIGN KEY(guild_id) REFERENCES guilds(id) ON DELETE CASCADE
-);
-
 -- AutoMod settings table
 CREATE TABLE IF NOT EXISTS automod_settings (
     guild_id TEXT PRIMARY KEY,

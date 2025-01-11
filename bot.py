@@ -65,7 +65,6 @@ class ArabLifeBot(commands.Bot):
             'cogs.ticket_commands',
             'cogs.welcome_commands',
             'cogs.security_commands',
-            'cogs.leveling_commands',
             'cogs.automod_commands',
             'cogs.custom_commands'
         ]
