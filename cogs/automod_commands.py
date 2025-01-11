@@ -343,16 +343,11 @@ class AutoModCommands(Cog):
         self,
         interaction: discord.Interaction,
         action: Literal["add", "remove"],
-        target: Union[discord.Role, discord.app_commands.AppCommandChannel]
+        target: Union[discord.Role, discord.TextChannel, discord.ForumChannel]
     ):
         """Manage AutoMod exemptions"""
-        if isinstance(target, discord.app_commands.AppCommandChannel):
-            if target.type != discord.ChannelType.text:
-                await interaction.response.send_message(
-                    "*يجب أن تكون القناة نصية.*",
-                    ephemeral=True
-                )
-                return
+        if isinstance(target, (discord.TextChannel, discord.ForumChannel)):
+            pass  # Both channel types are valid
                 
         try:
             settings = await self.get_settings(str(interaction.guild_id))
