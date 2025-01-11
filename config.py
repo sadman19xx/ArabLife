@@ -19,7 +19,6 @@ class Config:
     STATUS_COMMAND_COOLDOWN = int(os.getenv('STATUS_COMMAND_COOLDOWN', 5))
     TICKET_COMMAND_COOLDOWN = int(os.getenv('TICKET_COMMAND_COOLDOWN', 5))
     SECURITY_COMMAND_COOLDOWN = int(os.getenv('SECURITY_COMMAND_COOLDOWN', 5))
-    LEVEL_COMMAND_COOLDOWN = int(os.getenv('LEVEL_COMMAND_COOLDOWN', 5))
     AUTOMOD_COMMAND_COOLDOWN = int(os.getenv('AUTOMOD_COMMAND_COOLDOWN', 5))
     
     # Welcome settings
@@ -43,12 +42,6 @@ class Config:
     AUTOMOD_SPAM_INTERVAL = int(os.getenv('AUTOMOD_SPAM_INTERVAL', 5))
     AUTOMOD_RAID_THRESHOLD = int(os.getenv('AUTOMOD_RAID_THRESHOLD', 10))
     AUTOMOD_RAID_INTERVAL = int(os.getenv('AUTOMOD_RAID_INTERVAL', 10))
-    
-    # Leveling settings
-    XP_PER_MESSAGE = int(os.getenv('XP_PER_MESSAGE', 15))
-    XP_COOLDOWN = int(os.getenv('XP_COOLDOWN', 60))
-    LEVEL_UP_CHANNEL_ID = os.getenv('LEVEL_UP_CHANNEL_ID')
-    LEVEL_UP_MESSAGE = os.getenv('LEVEL_UP_MESSAGE', '🎉 {user} has reached level {level}!')
     
     # Health check settings
     HEALTH_CHECK_HOST = os.getenv('HEALTH_CHECK_HOST', '127.0.0.1')

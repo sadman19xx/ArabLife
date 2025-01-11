@@ -34,7 +34,6 @@ class HelpCommands(Cog, LoggerMixin):
                     "اختر فئة للحصول على معلومات مفصلة عن الأوامر المتاحة:\n\n"
                     "🎫 `/help tickets` - نظام التذاكر\n"
                     "🛡️ `/help security` - نظام الحماية\n"
-                    "⭐ `/help leveling` - نظام المستويات\n"
                     "🤖 `/help automod` - نظام المراقبة الآلي\n"
                     "👋 `/help welcome` - نظام الترحيب\n"
                     "👥 `/help roles` - إدارة الرتب\n"
@@ -65,7 +64,6 @@ class HelpCommands(Cog, LoggerMixin):
         embeds = {
             "tickets": self.get_tickets_help(),
             "security": self.get_security_help(),
-            "leveling": self.get_leveling_help(),
             "automod": self.get_automod_help(),
             "welcome": self.get_welcome_help(),
             "roles": self.get_roles_help(),
@@ -142,36 +140,6 @@ class HelpCommands(Cog, LoggerMixin):
             value=(
                 "• `/raidmode [on/off]` - تفعيل/تعطيل وضع الحماية من الهجمات\n"
                 "يتم تفعيله تلقائياً عند اكتشاف هجوم"
-            ),
-            inline=False
-        )
-        
-        return embed
-
-    def get_leveling_help(self) -> discord.Embed:
-        """Get help embed for leveling commands"""
-        embed = discord.Embed(
-            title="⭐ نظام المستويات",
-            description="أوامر نظام المستويات المتاحة:",
-            color=discord.Color.blue()
-        )
-        
-        embed.add_field(
-            name="الأعضاء",
-            value=(
-                "• `/rank` - عرض مستواك الحالي\n"
-                "• `/leaderboard` - عرض قائمة المتصدرين"
-            ),
-            inline=False
-        )
-        
-        embed.add_field(
-            name="الإدارة",
-            value=(
-                "• `/setxp [member] [amount]` - تعديل نقاط الخبرة\n"
-                "• `/resetxp [member]` - إعادة تعيين نقاط الخبرة\n"
-                "• `/levelrole add [level] [role]` - إضافة رتبة مستوى\n"
-                "• `/levelrole remove [level]` - إزالة رتبة مستوى"
             ),
             inline=False
         )
