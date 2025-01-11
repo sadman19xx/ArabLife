@@ -21,6 +21,9 @@ os.makedirs('logs', exist_ok=True)
 
 # Set up intents with all privileges
 intents = discord.Intents.all()
+intents.message_content = True
+intents.members = True
+intents.presences = True
 
 class ArabLifeBot(commands.Bot):
     """Custom bot class with additional functionality"""
@@ -166,6 +169,16 @@ class ArabLifeBot(commands.Bot):
                     """, (str(guild.id), "!"))
             except Exception as e:
                 logging.error(f"Failed to initialize database for guild {guild.id}: {e}")
+
+        # Sync commands again after bot is ready
+        if Config.GUILD_ID:
+            try:
+                guild = discord.Object(id=Config.GUILD_ID)
+                self.tree.copy_global_to(guild=guild)
+                await self.tree.sync(guild=guild)
+                print("Successfully synced commands to guild after ready!")
+            except Exception as e:
+                print(f"Failed to sync commands after ready: {e}")
 
     async def on_guild_join(self, guild: discord.Guild) -> None:
         """Event triggered when the bot joins a new guild"""

@@ -85,6 +85,7 @@ CREATE TABLE IF NOT EXISTS tickets (
     user_id TEXT NOT NULL,
     ticket_type TEXT NOT NULL,
     status TEXT DEFAULT 'open',
+    claimed_by TEXT,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     closed_at DATETIME,
     last_activity DATETIME DEFAULT CURRENT_TIMESTAMP,
