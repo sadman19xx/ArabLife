@@ -4,28 +4,50 @@
 echo "Updating package list..."
 sudo apt-get update
 
+# Check if Python is installed
+if ! command -v python3 &> /dev/null; then
+    echo "Python 3 is not installed. Installing..."
+    sudo apt-get install -y python3
+fi
+
 # Install system dependencies
 echo "Installing system dependencies..."
-sudo apt-get install -y python3 python3-pip python3-venv ffmpeg
+sudo apt-get install -y python3-full python3-pip python3-venv ffmpeg
 
-# Create virtual environment if it doesn't exist
+# Remove old venv if it exists
+if [ -d "venv" ]; then
+    echo "Removing old virtual environment..."
+    rm -rf venv
+fi
+
+# Create virtual environment
+echo "Creating virtual environment..."
+python3 -m venv venv
+
+# Check if venv was created successfully
 if [ ! -d "venv" ]; then
-    echo "Creating virtual environment..."
-    python3 -m venv venv
+    echo "Failed to create virtual environment. Please ensure python3-venv is installed."
+    exit 1
 fi
 
 # Activate virtual environment
 echo "Activating virtual environment..."
 source venv/bin/activate
 
-# Upgrade pip
-echo "Upgrading pip..."
-python -m pip install --upgrade pip
+# Verify we're in the virtual environment
+if [ -z "$VIRTUAL_ENV" ]; then
+    echo "Failed to activate virtual environment"
+    exit 1
+fi
 
-# Install dependencies
+# Upgrade pip in the virtual environment
+echo "Upgrading pip..."
+./venv/bin/pip install --upgrade pip
+
+# Install dependencies in the virtual environment
 echo "Installing Python dependencies..."
-pip install wheel
-pip install -r requirements.txt
+./venv/bin/pip install wheel
+./venv/bin/pip install -r requirements.txt
 
 # Create necessary directories
 echo "Creating necessary directories..."
@@ -85,4 +107,11 @@ echo "Next steps:"
 echo "1. Edit the .env file with your bot token and other settings"
 echo "2. Place welcome.mp3 in the root directory for welcome sounds"
 echo "3. Place arabic.ttf in the fonts directory for welcome messages"
-echo "4. Run the bot with: python bot.py"
+echo "4. Run the bot with: ./venv/bin/python bot.py"
+
+# Add venv activation to .bashrc if it doesn't exist
+if ! grep -q "source $(pwd)/venv/bin/activate" ~/.bashrc; then
+    echo "# Activate ArabLife bot virtual environment" >> ~/.bashrc
+    echo "source $(pwd)/venv/bin/activate" >> ~/.bashrc
+    echo "Added virtual environment activation to .bashrc"
+fi
