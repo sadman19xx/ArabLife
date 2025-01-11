@@ -59,6 +59,12 @@ class Config:
     BLACKLISTED_WORDS = os.getenv('BLACKLISTED_WORDS', '').split(',')
     ALLOWED_DOMAINS = os.getenv('ALLOWED_DOMAINS', 'discord.com,discord.gg').split(',')
     
+    # Role settings
+    VISA_IMAGE_URL = os.getenv('VISA_IMAGE_URL', 'https://i.imgur.com/default_visa.png')
+    
+    # Voice settings
+    FFMPEG_PATH = os.getenv('FFMPEG_PATH', '/usr/bin/ffmpeg')  # Default Linux path
+    
     @classmethod
     def validate_config(cls) -> None:
         """Validate required configuration settings"""

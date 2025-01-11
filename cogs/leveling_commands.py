@@ -346,7 +346,7 @@ class LevelingCommands(Cog):
     async def set_multiplier(
         self,
         interaction: discord.Interaction,
-        target: Union[discord.Role, discord.abc.GuildChannel],
+        target: Union[discord.Role, discord.TextChannel],
         multiplier: float
     ):
         """Set XP multiplier for a role or channel"""
@@ -408,7 +408,7 @@ class LevelingCommands(Cog):
     async def remove_multiplier(
         self,
         interaction: discord.Interaction,
-        target: Union[discord.Role, discord.abc.GuildChannel]
+        target: Union[discord.Role, discord.TextChannel]
     ):
         """Remove XP multiplier from a role or channel"""
         try:
