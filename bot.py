@@ -8,7 +8,7 @@ import aiosqlite
 import sys
 import traceback
 from datetime import datetime
-from typing import Optional, Dict, List
+from typing import Optional, Dict, List, Union, Callable, Any
 from collections import defaultdict
 from config import Config
 from utils.logger import setup_logging
@@ -25,7 +25,14 @@ intents = discord.Intents.all()
 class ArabLifeBot(commands.Bot):
     """Custom bot class with additional functionality"""
     
-    def __init__(self):
+    def __init__(self) -> None:
+        # Initialize attributes with type hints
+        self.uptime: Optional[datetime] = None
+        self.prefixes: Dict[int, str] = {}
+        self.cog_load_order: List[str] = []
+        self.command_stats: Dict[str, int] = defaultdict(int)  # Track command usage
+        self.error_count: int = 0  # Track error count
+        
         super().__init__(
             command_prefix=self.get_prefix,
             intents=intents,
@@ -38,13 +45,6 @@ class ArabLifeBot(commands.Bot):
                 replied_user=True
             )
         )
-        
-        # Initialize bot state
-        self.uptime = None
-        self.prefixes = {}
-        self.cog_load_order = []
-        self.command_stats = defaultdict(int)  # Track command usage
-        self.error_count = 0  # Track error count
         self.health_server = HealthCheck(self)  # Health check server
         self.cog_dependencies = {
             'cogs.leveling_commands': ['utils.database'],
@@ -70,7 +70,7 @@ class ArabLifeBot(commands.Bot):
         # Set up error handlers
         self.tree.on_error = self.on_app_command_error
         
-    async def get_prefix(self, message: discord.Message) -> str:
+    async def get_prefix(self, message: discord.Message) -> Union[str, List[str]]:
         """Get the prefix for the guild"""
         # DMs use default prefix
         if not message.guild:
@@ -80,17 +80,21 @@ class ArabLifeBot(commands.Bot):
         if message.guild.id in self.prefixes:
             return self.prefixes[message.guild.id]
             
-        # Get prefix from database
-        async with db.transaction() as cursor:
-            await cursor.execute("""
-                SELECT prefix FROM bot_settings WHERE guild_id = ?
-            """, (str(message.guild.id),))
-            result = await cursor.fetchone()
+        try:
+            # Get prefix from database
+            async with db.transaction() as cursor:
+                await cursor.execute("""
+                    SELECT prefix FROM bot_settings WHERE guild_id = ?
+                """, (str(message.guild.id),))
+                result = await cursor.fetchone()
                 
-        # Cache and return the prefix
-        prefix = result[0] if result else "!"
-        self.prefixes[message.guild.id] = prefix
-        return prefix
+            # Cache and return the prefix
+            prefix = result[0] if result else "!"
+            self.prefixes[message.guild.id] = prefix
+            return prefix
+        except Exception as e:
+            logging.error(f"Error fetching prefix for guild {message.guild.id}: {e}")
+            return "!"  # Fallback to default prefix on error
 
     async def load_extension_with_dependencies(self, extension: str) -> None:
         """Load an extension after its dependencies"""
@@ -110,7 +114,7 @@ class ArabLifeBot(commands.Bot):
             print(f'Failed to load extension {extension}: {str(e)}')
             traceback.print_exc()
 
-    async def setup_hook(self):
+    async def setup_hook(self) -> None:
         """Initialize bot setup"""
         # Initialize database
         await db.init()
@@ -129,12 +133,17 @@ class ArabLifeBot(commands.Bot):
         
         # Sync commands with guild
         if Config.GUILD_ID:
-            guild = discord.Object(id=Config.GUILD_ID)
-            self.tree.copy_global_to(guild=guild)
-            await self.tree.sync(guild=guild)
-            print("Successfully synced commands to guild!")
+            try:
+                guild = discord.Object(id=Config.GUILD_ID)
+                self.tree.copy_global_to(guild=guild)
+                await self.tree.sync(guild=guild)
+                print("Successfully synced commands to guild!")
+            except discord.HTTPException as e:
+                print(f"Failed to sync commands: {e}")
+            except Exception as e:
+                print(f"Unexpected error syncing commands: {e}")
 
-    async def on_ready(self):
+    async def on_ready(self) -> None:
         """Event triggered when the bot is ready"""
         if not self.uptime:
             self.uptime = datetime.utcnow()
@@ -154,32 +163,39 @@ class ArabLifeBot(commands.Bot):
 
         # Initialize database for each guild
         for guild in self.guilds:
+            try:
+                async with db.transaction() as cursor:
+                    # Insert guild if not exists
+                    await cursor.execute("""
+                        INSERT OR IGNORE INTO guilds (id, name, owner_id, member_count)
+                        VALUES (?, ?, ?, ?)
+                    """, (str(guild.id), guild.name, str(guild.owner_id), guild.member_count))
+                    
+                    # Insert default bot settings if not exists
+                    await cursor.execute("""
+                        INSERT OR IGNORE INTO bot_settings (guild_id, prefix)
+                        VALUES (?, ?)
+                    """, (str(guild.id), "!"))
+            except Exception as e:
+                logging.error(f"Failed to initialize database for guild {guild.id}: {e}")
+
+    async def on_guild_join(self, guild: discord.Guild) -> None:
+        """Event triggered when the bot joins a new guild"""
+        try:
+            # Initialize database for new guild
             async with db.transaction() as cursor:
-                # Insert guild if not exists
                 await cursor.execute("""
                     INSERT OR IGNORE INTO guilds (id, name, owner_id, member_count)
                     VALUES (?, ?, ?, ?)
                 """, (str(guild.id), guild.name, str(guild.owner_id), guild.member_count))
                 
-                # Insert default bot settings if not exists
                 await cursor.execute("""
                     INSERT OR IGNORE INTO bot_settings (guild_id, prefix)
                     VALUES (?, ?)
                 """, (str(guild.id), "!"))
-
-    async def on_guild_join(self, guild: discord.Guild):
-        """Event triggered when the bot joins a new guild"""
-        # Initialize database for new guild
-        async with db.transaction() as cursor:
-            await cursor.execute("""
-                INSERT OR IGNORE INTO guilds (id, name, owner_id, member_count)
-                VALUES (?, ?, ?, ?)
-            """, (str(guild.id), guild.name, str(guild.owner_id), guild.member_count))
-            
-            await cursor.execute("""
-                INSERT OR IGNORE INTO bot_settings (guild_id, prefix)
-                VALUES (?, ?)
-            """, (str(guild.id), "!"))
+        except Exception as e:
+            logging.error(f"Failed to initialize database for new guild {guild.id}: {e}")
+            return
 
         # Sync commands to the new guild
         if Config.GUILD_ID and guild.id == Config.GUILD_ID:
@@ -188,7 +204,7 @@ class ArabLifeBot(commands.Bot):
             await self.tree.sync(guild=guild_obj)
             print(f"Synced commands to new guild: {guild.name}")
 
-    async def on_error(self, event_method: str, *args, **kwargs):
+    async def on_error(self, event_method: str, *args: Any, **kwargs: Any) -> None:
         """Global error handler for events"""
         self.error_count += 1
         exc_info = sys.exc_info()
@@ -207,12 +223,12 @@ class ArabLifeBot(commands.Bot):
                 except:
                     pass
 
-    async def on_command(self, ctx):
+    async def on_command(self, ctx: commands.Context) -> None:
         """Track command usage"""
         self.command_stats[ctx.command.qualified_name] += 1
         await super().on_command(ctx)
 
-    async def on_command_error(self, ctx, error):
+    async def on_command_error(self, ctx: commands.Context, error: Exception) -> None:
         """Global error handler for command errors"""
         self.error_count += 1
         
@@ -241,7 +257,7 @@ class ArabLifeBot(commands.Bot):
             logging.error(f"An unexpected error occurred: {error}", exc_info=True)
             await ctx.send('*حدث خطأ غير متوقع. ارجو التواصل مع إدارة الديسكورد وتقديم تفاصيل الأمر.*')
 
-    async def on_app_command_error(self, interaction: discord.Interaction, error: app_commands.AppCommandError):
+    async def on_app_command_error(self, interaction: discord.Interaction, error: app_commands.AppCommandError) -> None:
         """Global error handler for application commands"""
         self.error_count += 1
         
@@ -262,7 +278,7 @@ class ArabLifeBot(commands.Bot):
                 ephemeral=True
             )
 
-    async def close(self):
+    async def close(self) -> None:
         """Cleanup when bot is shutting down"""
         print("Bot is shutting down...")
         

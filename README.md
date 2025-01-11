@@ -1,153 +1,95 @@
 # ArabLife Discord Bot
 
-A custom Discord bot based on MEE6 with specialized features for Arabic communities.
+Discord bot for Arabic communities with welcome system, role management, and security features.
 
-## Features
+## Ubuntu Installation
 
-- **Welcome System**
-  - Custom welcome images with Arabic text support
-  - Welcome sound effects in voice channels
-  - Configurable welcome/goodbye messages
+1. Update system and install dependencies:
+```bash
+sudo apt update
+sudo apt install -y git python3 python3-pip python3-venv ffmpeg
+```
 
-- **Role Management**
-  - Visa role system
-  - Role tracking and logging
-  - Permission-based role commands
-
-- **Security**
-  - Raid protection
-  - Spam detection
-  - Warning system
-  - Blacklisted words with wildcard support
-  - Auto-moderation
-
-- **Ticket System**
-  - Department-based tickets
-  - Ticket logging
-  - Staff management
-
-## Requirements
-
-- Python 3.8 or higher
-- FFmpeg (for voice features)
-- Arabic font file (for welcome messages)
-- Welcome sound file (MP3 format)
-
-## Setup
-
-1. Clone the repository:
+2. Clone and setup:
 ```bash
 git clone https://github.com/yourusername/arablife.git
 cd arablife
-```
-
-2. Run the installation script:
-```bash
+chmod +x install.sh run.sh
 ./install.sh
 ```
 
-3. Configure the bot:
-   - Edit the `.env` file with your bot token and other settings
-   - Place `welcome.mp3` in the root directory
-   - Place `arabic.ttf` in the `fonts` directory
+3. Add required files:
+- Place `welcome.mp3` in the root directory
+- Place `arabic.ttf` in the `fonts` directory
+- Edit `.env` with your bot settings
 
 4. Start the bot:
 ```bash
 ./run.sh
 ```
 
-## File Structure
+## Features
 
-- `welcome.mp3` - Welcome sound file (place in root directory)
-- `fonts/arabic.ttf` - Arabic font file for welcome messages
-- `.env` - Bot configuration and tokens
-- `data/` - Database and persistent data
-- `logs/` - Bot logs and error tracking
+### Welcome System
+- Custom welcome images with Arabic text
+- Welcome sound in voice channel
+- Configurable messages
 
-## Configuration
+### Role Management
+- Visa role system (`مقبول`, `مرفوض`)
+- Role tracking
+- Permission-based commands
 
-The `.env` file contains all bot settings:
+### Security
+- Raid protection
+- Spam detection
+- Warning system
+- Word blacklist
 
-```env
-# Bot Configuration
-TOKEN=your_bot_token_here
-GUILD_ID=your_guild_id_here
-
-# Channel IDs
-WELCOME_CHANNEL_ID=channel_id
-WELCOME_VOICE_CHANNEL_ID=voice_channel_id
-ROLE_ACTIVITY_LOG_CHANNEL_ID=log_channel_id
-AUDIT_LOG_CHANNEL_ID=audit_channel_id
-
-# Role IDs
-ROLE_IDS_ALLOWED=role_id1,role_id2
-ROLE_ID_TO_GIVE=visa_role_id
-ROLE_ID_REMOVE_ALLOWED=admin_role_id
-
-# Security Settings
-RAID_PROTECTION=true
-SPAM_DETECTION=true
-WARNING_THRESHOLD=3
-WARNING_ACTION=timeout
-WARNING_DURATION=3600
-```
+### Ticket System
+- Department-based tickets
+- Ticket logging
+- Staff management
 
 ## Commands
 
-### Welcome Commands
-- `/setwelcomechannel` - Set welcome message channel
-- `/setwelcomebackground` - Set welcome image background
-- `/testwelcome` - Test welcome system
+### Welcome
+- `/setwelcomechannel` - Set welcome channel
+- `/setwelcomebackground` - Set background
+- `/testwelcome` - Test system
 
-### Role Commands
+### Roles
 - `مقبول` - Give visa role
 - `مرفوض` - Remove visa role
 
-### Security Commands
-- `/raidmode` - Toggle raid protection
-- `/warnings` - Check user warnings
-- `/clearwarnings` - Clear user warnings
-- `/blacklist` - Manage blacklisted words
+### Security
+- `/raidmode` - Toggle raid mode
+- `/warnings` - Check warnings
+- `/clearwarnings` - Clear warnings
+- `/blacklist` - Manage blacklist
 
-### AutoMod Commands
-- `/automod_toggle` - Enable/disable automod
-- `/automod_action` - Set automod action
-- `/automod_exempt` - Add role/channel exemptions
-- `/automod_status` - View automod settings
-
-## Development
-
-The bot uses:
-- `discord.py` for Discord API
-- SQLite for data storage
-- Pillow for image processing
-- FFmpeg for audio processing
+### AutoMod
+- `/automod_toggle` - Toggle automod
+- `/automod_action` - Set action
+- `/automod_exempt` - Add exemptions
+- `/automod_status` - View settings
 
 ## Troubleshooting
 
-1. **Welcome Sound Not Working**
-   - Ensure `welcome.mp3` is in the root directory
-   - Check FFmpeg installation
-   - Verify voice channel permissions
+1. **Welcome Sound Issues**
+   - Check `welcome.mp3` exists
+   - Verify FFmpeg installation
+   - Check voice permissions
 
-2. **Welcome Images Not Displaying**
-   - Verify `arabic.ttf` is in the fonts directory
-   - Check image processing permissions
-   - Ensure bot has message permissions
+2. **Welcome Images Issues**
+   - Verify `arabic.ttf` exists
+   - Check bot permissions
 
-3. **Database Errors**
-   - Check write permissions in data directory
-   - Verify SQLite installation
-   - Check disk space
+3. **Database Issues**
+   - Check directory permissions
+   - Verify disk space
 
-## Support
-
-For issues and support:
-1. Check the logs in `logs/bot.log`
-2. Verify all configuration in `.env`
-3. Ensure all required files are in place
-4. Check bot permissions in Discord
-
-## License
-
-This project is licensed under the MIT License - see the LICENSE file for details.
+For support:
+1. Check `logs/bot.log`
+2. Verify `.env` settings
+3. Check Discord permissions

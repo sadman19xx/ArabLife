@@ -1,36 +1,12 @@
 #!/bin/bash
 
-# Function to check if a command exists
-command_exists() {
-    command -v "$1" >/dev/null 2>&1
-}
+# Update package list
+echo "Updating package list..."
+sudo apt-get update
 
-# Function to install system dependencies
-install_system_deps() {
-    echo "Installing system dependencies..."
-    if command_exists apt-get; then
-        sudo apt-get update
-        sudo apt-get install -y python3 python3-pip python3-venv ffmpeg
-    elif command_exists yum; then
-        sudo yum update
-        sudo yum install -y python3 python3-pip python3-venv ffmpeg
-    else
-        echo "Unsupported package manager. Please install Python 3, pip, and ffmpeg manually."
-        exit 1
-    fi
-}
-
-# Check Python version
-if ! command_exists python3; then
-    echo "Python 3 not found. Installing system dependencies..."
-    install_system_deps
-fi
-
-# Check if ffmpeg is installed
-if ! command_exists ffmpeg; then
-    echo "FFmpeg not found. Installing system dependencies..."
-    install_system_deps
-fi
+# Install system dependencies
+echo "Installing system dependencies..."
+sudo apt-get install -y python3 python3-pip python3-venv ffmpeg
 
 # Create virtual environment if it doesn't exist
 if [ ! -d "venv" ]; then

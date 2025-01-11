@@ -1,117 +1,156 @@
 import os
 import json
 import shutil
+from typing import Dict, List, Optional, Union, Any
 from dotenv import load_dotenv
 
 # Load environment variables
 load_dotenv()
 
+def parse_int(value: Optional[str], default: int = 0) -> int:
+    """Safely parse integer from environment variable"""
+    if not value:
+        return default
+    try:
+        return int(value)
+    except ValueError:
+        return default
+
+def parse_float(value: Optional[str], default: float = 0.0) -> float:
+    """Safely parse float from environment variable"""
+    if not value:
+        return default
+    try:
+        return float(value)
+    except ValueError:
+        return default
+
+def parse_list(value: Optional[str], separator: str = ',') -> List[str]:
+    """Safely parse list from environment variable"""
+    if not value:
+        return []
+    return [item.strip() for item in value.split(separator) if item.strip()]
+
+def parse_json(value: Optional[str], default: Any = None) -> Any:
+    """Safely parse JSON from environment variable"""
+    if not value:
+        return default if default is not None else {}
+    try:
+        return json.loads(value)
+    except json.JSONDecodeError as e:
+        print(f"Warning: Failed to parse JSON: {e}")
+        return default if default is not None else {}
+
+def parse_bool(value: Optional[str], default: bool = False) -> bool:
+    """Safely parse boolean from environment variable"""
+    if not value:
+        return default
+    return value.lower() == 'true'
+
 # Bot configuration
 class Config:
+    """Configuration class with type hints and safe parsing"""
     # Token and Guild settings
-    TOKEN = os.getenv('TOKEN')
-    GUILD_ID = int(os.getenv('GUILD_ID'))
+    TOKEN: Optional[str] = os.getenv('TOKEN')
+    GUILD_ID: int = parse_int(os.getenv('GUILD_ID'))
     
     # Role settings
-    ROLE_IDS_ALLOWED = list(map(int, os.getenv('ROLE_IDS_ALLOWED', '').split(',')))
-    ROLE_ID_TO_GIVE = int(os.getenv('ROLE_ID_TO_GIVE'))
-    ROLE_ID_REMOVE_ALLOWED = int(os.getenv('ROLE_ID_REMOVE_ALLOWED'))
+    ROLE_IDS_ALLOWED: List[int] = [parse_int(id_str) for id_str in parse_list(os.getenv('ROLE_IDS_ALLOWED')) if id_str]
+    ROLE_ID_TO_GIVE: int = parse_int(os.getenv('ROLE_ID_TO_GIVE'))
+    ROLE_ID_REMOVE_ALLOWED: int = parse_int(os.getenv('ROLE_ID_REMOVE_ALLOWED'))
     
     # Channel IDs
-    ROLE_ACTIVITY_LOG_CHANNEL_ID = int(os.getenv('ROLE_ACTIVITY_LOG_CHANNEL_ID'))
-    AUDIT_LOG_CHANNEL_ID = int(os.getenv('AUDIT_LOG_CHANNEL_ID'))
-    ERROR_LOG_CHANNEL_ID = int(os.getenv('ERROR_LOG_CHANNEL_ID', '0'))
-    WELCOME_VOICE_CHANNEL_ID = int(os.getenv('WELCOME_VOICE_CHANNEL_ID', '1309595750878937240'))
-    WELCOME_CHANNEL_ID = int(os.getenv('WELCOME_CHANNEL_ID', '0'))
+    ROLE_ACTIVITY_LOG_CHANNEL_ID: int = parse_int(os.getenv('ROLE_ACTIVITY_LOG_CHANNEL_ID'))
+    AUDIT_LOG_CHANNEL_ID: int = parse_int(os.getenv('AUDIT_LOG_CHANNEL_ID'))
+    ERROR_LOG_CHANNEL_ID: int = parse_int(os.getenv('ERROR_LOG_CHANNEL_ID'), 0)
+    WELCOME_VOICE_CHANNEL_ID: int = parse_int(os.getenv('WELCOME_VOICE_CHANNEL_ID'), 1309595750878937240)
+    WELCOME_CHANNEL_ID: int = parse_int(os.getenv('WELCOME_CHANNEL_ID'), 0)
     
     # Welcome Message settings
-    WELCOME_BACKGROUND_URL = os.getenv('WELCOME_BACKGROUND_URL', 'https://i.imgur.com/your_background.png')
-    WELCOME_MESSAGE = os.getenv('WELCOME_MESSAGE', 'Welcome {user} to {server}! 🎉')
-    GOODBYE_MESSAGE = os.getenv('GOODBYE_MESSAGE', 'Goodbye {user}, we hope to see you again! 👋')
-    WELCOME_EMBED_COLOR = int(os.getenv('WELCOME_EMBED_COLOR', '0x2ecc71'), 16)
-    WELCOME_EMBED_TITLE = os.getenv('WELCOME_EMBED_TITLE', 'Welcome to {server}!')
-    WELCOME_EMBED_DESCRIPTION = os.getenv('WELCOME_EMBED_DESCRIPTION', 'Welcome {user} to our community!\n\nMember Count: {member_count}')
+    WELCOME_BACKGROUND_URL: str = os.getenv('WELCOME_BACKGROUND_URL', 'https://i.imgur.com/your_background.png')
+    WELCOME_MESSAGE: str = os.getenv('WELCOME_MESSAGE', 'Welcome {user} to {server}! 🎉')
+    GOODBYE_MESSAGE: str = os.getenv('GOODBYE_MESSAGE', 'Goodbye {user}, we hope to see you again! 👋')
+    WELCOME_EMBED_COLOR: int = parse_int(os.getenv('WELCOME_EMBED_COLOR', '0x2ecc71'), 0x2ecc71)
+    WELCOME_EMBED_TITLE: str = os.getenv('WELCOME_EMBED_TITLE', 'Welcome to {server}!')
+    WELCOME_EMBED_DESCRIPTION: str = os.getenv('WELCOME_EMBED_DESCRIPTION', 'Welcome {user} to our community!\n\nMember Count: {member_count}')
     
     # Voice settings
-    WELCOME_SOUND_PATH = os.getenv('WELCOME_SOUND_PATH', None)  # Optional welcome sound
-    DEFAULT_VOLUME = float(os.getenv('DEFAULT_VOLUME', '0.5'))
-    FFMPEG_PATH = os.getenv('FFMPEG_PATH', None)  # Optional custom FFmpeg path
+    WELCOME_SOUND_PATH: Optional[str] = os.getenv('WELCOME_SOUND_PATH')
+    DEFAULT_VOLUME: float = parse_float(os.getenv('DEFAULT_VOLUME'), 0.5)
+    FFMPEG_PATH: Optional[str] = os.getenv('FFMPEG_PATH')
     
-    # Parse JSON settings with error handling
-    try:
-        ROLE_REWARDS = json.loads(os.getenv('ROLE_REWARDS', '{}'))
-        CHANNEL_MULTIPLIERS = json.loads(os.getenv('CHANNEL_MULTIPLIERS', '{}'))
-        ROLE_MULTIPLIERS = json.loads(os.getenv('ROLE_MULTIPLIERS', '{}'))
-    except json.JSONDecodeError as e:
-        raise ValueError(f"Invalid JSON format in environment variables: {str(e)}")
+    # JSON settings
+    ROLE_REWARDS: Dict[str, Any] = parse_json(os.getenv('ROLE_REWARDS'))
+    CHANNEL_MULTIPLIERS: Dict[str, float] = parse_json(os.getenv('CHANNEL_MULTIPLIERS'))
+    ROLE_MULTIPLIERS: Dict[str, float] = parse_json(os.getenv('ROLE_MULTIPLIERS'))
     
     # Command cooldowns (in seconds)
-    ROLE_COMMAND_COOLDOWN = int(os.getenv('ROLE_COMMAND_COOLDOWN', '5'))
-    STATUS_COMMAND_COOLDOWN = int(os.getenv('STATUS_COMMAND_COOLDOWN', '10'))
-    SOUND_COMMAND_COOLDOWN = int(os.getenv('SOUND_COMMAND_COOLDOWN', '5'))
-    TICKET_COMMAND_COOLDOWN = int(os.getenv('TICKET_COMMAND_COOLDOWN', '30'))
+    ROLE_COMMAND_COOLDOWN: int = parse_int(os.getenv('ROLE_COMMAND_COOLDOWN'), 5)
+    STATUS_COMMAND_COOLDOWN: int = parse_int(os.getenv('STATUS_COMMAND_COOLDOWN'), 10)
+    SOUND_COMMAND_COOLDOWN: int = parse_int(os.getenv('SOUND_COMMAND_COOLDOWN'), 5)
+    TICKET_COMMAND_COOLDOWN: int = parse_int(os.getenv('TICKET_COMMAND_COOLDOWN'), 30)
     
     # Security settings
-    MAX_STATUS_LENGTH = int(os.getenv('MAX_STATUS_LENGTH', '100'))
-    BLACKLISTED_WORDS = os.getenv('BLACKLISTED_WORDS', '').split(',')
-    MAX_MENTIONS = int(os.getenv('MAX_MENTIONS', '5'))
-    RAID_PROTECTION = os.getenv('RAID_PROTECTION', 'true').lower() == 'true'
-    MIN_ACCOUNT_AGE = int(os.getenv('MIN_ACCOUNT_AGE', '7'))  # days
-    ALLOWED_DOMAINS = os.getenv('ALLOWED_DOMAINS', 'discord.com,discord.gg').split(',')
-    SPAM_DETECTION = os.getenv('SPAM_DETECTION', 'true').lower() == 'true'
-    AUTO_TIMEOUT_DURATION = int(os.getenv('AUTO_TIMEOUT_DURATION', '3600'))  # seconds
-    WARNING_THRESHOLD = int(os.getenv('WARNING_THRESHOLD', '3'))
-    WARNING_ACTION = os.getenv('WARNING_ACTION', 'timeout')  # timeout, kick, ban
-    WARNING_DURATION = int(os.getenv('WARNING_DURATION', '3600'))  # seconds
-    WARNING_EXPIRE_DAYS = int(os.getenv('WARNING_EXPIRE_DAYS', '30'))  # days until warnings expire
-    EXEMPT_ROLES = list(map(int, os.getenv('EXEMPT_ROLES', '').split(',')))  # Roles exempt from security checks
+    MAX_STATUS_LENGTH: int = parse_int(os.getenv('MAX_STATUS_LENGTH'), 100)
+    BLACKLISTED_WORDS: List[str] = parse_list(os.getenv('BLACKLISTED_WORDS'))
+    MAX_MENTIONS: int = parse_int(os.getenv('MAX_MENTIONS'), 5)
+    RAID_PROTECTION: bool = parse_bool(os.getenv('RAID_PROTECTION'), True)
+    MIN_ACCOUNT_AGE: int = parse_int(os.getenv('MIN_ACCOUNT_AGE'), 7)  # days
+    ALLOWED_DOMAINS: List[str] = parse_list(os.getenv('ALLOWED_DOMAINS'), ',')
+    SPAM_DETECTION: bool = parse_bool(os.getenv('SPAM_DETECTION'), True)
+    AUTO_TIMEOUT_DURATION: int = parse_int(os.getenv('AUTO_TIMEOUT_DURATION'), 3600)  # seconds
+    WARNING_THRESHOLD: int = parse_int(os.getenv('WARNING_THRESHOLD'), 3)
+    WARNING_ACTION: str = os.getenv('WARNING_ACTION', 'timeout')  # timeout, kick, ban
+    WARNING_DURATION: int = parse_int(os.getenv('WARNING_DURATION'), 3600)  # seconds
+    WARNING_EXPIRE_DAYS: int = parse_int(os.getenv('WARNING_EXPIRE_DAYS'), 30)  # days until warnings expire
+    EXEMPT_ROLES: List[int] = [parse_int(id_str) for id_str in parse_list(os.getenv('EXEMPT_ROLES')) if id_str]
     
     # AutoMod settings
-    AUTOMOD_ENABLED = os.getenv('AUTOMOD_ENABLED', 'true').lower() == 'true'
-    AUTOMOD_SPAM_THRESHOLD = int(os.getenv('AUTOMOD_SPAM_THRESHOLD', '5'))
-    AUTOMOD_SPAM_INTERVAL = int(os.getenv('AUTOMOD_SPAM_INTERVAL', '5'))
-    AUTOMOD_RAID_THRESHOLD = int(os.getenv('AUTOMOD_RAID_THRESHOLD', '10'))
-    AUTOMOD_RAID_INTERVAL = int(os.getenv('AUTOMOD_RAID_INTERVAL', '30'))
-    AUTOMOD_ACTION = os.getenv('AUTOMOD_ACTION', 'warn')  # warn, mute, kick, ban
-    AUTOMOD_IGNORED_CHANNELS = list(map(int, os.getenv('AUTOMOD_IGNORED_CHANNELS', '').split(',')))
-    AUTOMOD_IGNORED_ROLES = list(map(int, os.getenv('AUTOMOD_IGNORED_ROLES', '').split(',')))
+    AUTOMOD_ENABLED: bool = parse_bool(os.getenv('AUTOMOD_ENABLED'), True)
+    AUTOMOD_SPAM_THRESHOLD: int = parse_int(os.getenv('AUTOMOD_SPAM_THRESHOLD'), 5)
+    AUTOMOD_SPAM_INTERVAL: int = parse_int(os.getenv('AUTOMOD_SPAM_INTERVAL'), 5)
+    AUTOMOD_RAID_THRESHOLD: int = parse_int(os.getenv('AUTOMOD_RAID_THRESHOLD'), 10)
+    AUTOMOD_RAID_INTERVAL: int = parse_int(os.getenv('AUTOMOD_RAID_INTERVAL'), 30)
+    AUTOMOD_ACTION: str = os.getenv('AUTOMOD_ACTION', 'warn')  # warn, mute, kick, ban
+    AUTOMOD_IGNORED_CHANNELS: List[int] = [parse_int(id_str) for id_str in parse_list(os.getenv('AUTOMOD_IGNORED_CHANNELS')) if id_str]
+    AUTOMOD_IGNORED_ROLES: List[int] = [parse_int(id_str) for id_str in parse_list(os.getenv('AUTOMOD_IGNORED_ROLES')) if id_str]
     
     # Leveling settings
-    LEVELING_ENABLED = os.getenv('LEVELING_ENABLED', 'true').lower() == 'true'
-    XP_PER_MESSAGE = int(os.getenv('XP_PER_MESSAGE', '15'))
-    XP_COOLDOWN = int(os.getenv('XP_COOLDOWN', '60'))
-    LEVEL_UP_CHANNEL_ID = os.getenv('LEVEL_UP_CHANNEL_ID')
-    LEVEL_UP_MESSAGE = os.getenv('LEVEL_UP_MESSAGE', 'Congratulations {user}! You reached level {level}!')
-    ROLE_REWARDS = os.getenv('ROLE_REWARDS', '[]')  # JSON string of {level: role_id} pairs
-    CHANNEL_MULTIPLIERS = os.getenv('CHANNEL_MULTIPLIERS', '{}')  # JSON string of {channel_id: multiplier}
-    ROLE_MULTIPLIERS = os.getenv('ROLE_MULTIPLIERS', '{}')  # JSON string of {role_id: multiplier}
+    LEVELING_ENABLED: bool = parse_bool(os.getenv('LEVELING_ENABLED'), True)
+    XP_PER_MESSAGE: int = parse_int(os.getenv('XP_PER_MESSAGE'), 15)
+    XP_COOLDOWN: int = parse_int(os.getenv('XP_COOLDOWN'), 60)
+    LEVEL_UP_CHANNEL_ID: Optional[int] = parse_int(os.getenv('LEVEL_UP_CHANNEL_ID'))
+    LEVEL_UP_MESSAGE: str = os.getenv('LEVEL_UP_MESSAGE', 'Congratulations {user}! You reached level {level}!')
+    ROLE_REWARDS: Dict[str, int] = parse_json(os.getenv('ROLE_REWARDS'), {})  # {level: role_id} pairs
+    CHANNEL_MULTIPLIERS: Dict[str, float] = parse_json(os.getenv('CHANNEL_MULTIPLIERS'), {})  # {channel_id: multiplier}
+    ROLE_MULTIPLIERS: Dict[str, float] = parse_json(os.getenv('ROLE_MULTIPLIERS'), {})  # {role_id: multiplier}
     
     # Visa settings
-    VISA_IMAGE_URL = os.getenv('VISA_IMAGE_URL', 'https://i.imgur.com/your_image_id.png')
+    VISA_IMAGE_URL: str = os.getenv('VISA_IMAGE_URL', 'https://i.imgur.com/your_image_id.png')
     
     # Ticket settings
-    TICKET_STAFF_ROLE_ID = int(os.getenv('TICKET_STAFF_ROLE_ID', '0'))  # Role that can see tickets
-    TICKET_CATEGORY_ID = int(os.getenv('TICKET_CATEGORY_ID', '0'))  # Category to create tickets in
-    TICKET_LOG_CHANNEL_ID = int(os.getenv('TICKET_LOG_CHANNEL_ID', '0'))  # Channel to log ticket actions
-    TICKET_ARCHIVE_DAYS = int(os.getenv('TICKET_ARCHIVE_DAYS', '30'))  # Days to keep closed tickets
-    TICKET_CLOSE_DELAY = int(os.getenv('TICKET_CLOSE_DELAY', '5'))  # Seconds to wait before deleting closed ticket
-    TICKET_RATE_LIMIT = int(os.getenv('TICKET_RATE_LIMIT', '1'))  # Maximum open tickets per user
-    TICKET_AUTO_CLOSE_HOURS = int(os.getenv('TICKET_AUTO_CLOSE_HOURS', '72'))  # Hours until inactive tickets auto-close
+    TICKET_STAFF_ROLE_ID: int = parse_int(os.getenv('TICKET_STAFF_ROLE_ID'), 0)  # Role that can see tickets
+    TICKET_CATEGORY_ID: int = parse_int(os.getenv('TICKET_CATEGORY_ID'), 0)  # Category to create tickets in
+    TICKET_LOG_CHANNEL_ID: int = parse_int(os.getenv('TICKET_LOG_CHANNEL_ID'), 0)  # Channel to log ticket actions
+    TICKET_ARCHIVE_DAYS: int = parse_int(os.getenv('TICKET_ARCHIVE_DAYS'), 30)  # Days to keep closed tickets
+    TICKET_CLOSE_DELAY: int = parse_int(os.getenv('TICKET_CLOSE_DELAY'), 5)  # Seconds to wait before deleting closed ticket
+    TICKET_RATE_LIMIT: int = parse_int(os.getenv('TICKET_RATE_LIMIT'), 1)  # Maximum open tickets per user
+    TICKET_AUTO_CLOSE_HOURS: int = parse_int(os.getenv('TICKET_AUTO_CLOSE_HOURS'), 72)  # Hours until inactive tickets auto-close
     
     # Department Role IDs
-    PLAYER_REPORT_ROLE_ID = int(os.getenv('PLAYER_REPORT_ROLE_ID', '0'))  # Staff for player reports
-    HEALTH_DEPT_ROLE_ID = int(os.getenv('HEALTH_DEPT_ROLE_ID', '0'))  # Health department staff
-    INTERIOR_DEPT_ROLE_ID = int(os.getenv('INTERIOR_DEPT_ROLE_ID', '0'))  # Interior department staff
-    FEEDBACK_ROLE_ID = int(os.getenv('FEEDBACK_ROLE_ID', '0'))  # Staff for feedback/suggestions
+    PLAYER_REPORT_ROLE_ID: int = parse_int(os.getenv('PLAYER_REPORT_ROLE_ID'), 0)  # Staff for player reports
+    HEALTH_DEPT_ROLE_ID: int = parse_int(os.getenv('HEALTH_DEPT_ROLE_ID'), 0)  # Health department staff
+    INTERIOR_DEPT_ROLE_ID: int = parse_int(os.getenv('INTERIOR_DEPT_ROLE_ID'), 0)  # Interior department staff
+    FEEDBACK_ROLE_ID: int = parse_int(os.getenv('FEEDBACK_ROLE_ID'), 0)  # Staff for feedback/suggestions
     
     # Logging settings
-    LOG_LEVEL = os.getenv('LOG_LEVEL', 'INFO')
-    LOG_FILE_PATH = os.getenv('LOG_FILE_PATH', 'logs/bot.log')
-    LOG_FORMAT = os.getenv('LOG_FORMAT', '%(asctime)s - %(name)s - %(levelname)s - %(message)s')
-    LOG_MAX_BYTES = int(os.getenv('LOG_MAX_BYTES', '10485760'))  # 10MB
-    LOG_BACKUP_COUNT = int(os.getenv('LOG_BACKUP_COUNT', '5'))
-    LOG_TO_CONSOLE = os.getenv('LOG_TO_CONSOLE', 'true').lower() == 'true'
-    LOG_TO_FILE = os.getenv('LOG_TO_FILE', 'true').lower() == 'true'
+    LOG_LEVEL: str = os.getenv('LOG_LEVEL', 'INFO')
+    LOG_FILE_PATH: str = os.getenv('LOG_FILE_PATH', 'logs/bot.log')
+    LOG_FORMAT: str = os.getenv('LOG_FORMAT', '%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+    LOG_MAX_BYTES: int = parse_int(os.getenv('LOG_MAX_BYTES'), 10485760)  # 10MB
+    LOG_BACKUP_COUNT: int = parse_int(os.getenv('LOG_BACKUP_COUNT'), 5)
+    LOG_TO_CONSOLE: bool = parse_bool(os.getenv('LOG_TO_CONSOLE'), True)
+    LOG_TO_FILE: bool = parse_bool(os.getenv('LOG_TO_FILE'), True)
     
     @classmethod
     def validate_config(cls):
