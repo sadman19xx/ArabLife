@@ -8,6 +8,13 @@ from config import Config
 
 logger = logging.getLogger('discord')
 
+# Create a separate logger for voice that only logs to file/console
+voice_logger = logging.getLogger('discord.voice')
+voice_logger.propagate = False  # Prevent logs from being sent to parent logger
+handler = logging.StreamHandler()
+handler.setFormatter(logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s'))
+voice_logger.addHandler(handler)
+
 class VoiceCommands(Cog):
     """Cog for voice-related commands"""
     
@@ -68,11 +75,11 @@ class VoiceCommands(Cog):
                     
                     if not self.voice_client.is_playing():
                         self.voice_client.play(transformed_source)
-                        logger.info(f"Playing welcome sound for {member.name}#{member.discriminator} in {welcome_channel.name}")
+                        voice_logger.info(f"Playing welcome sound for {member.name}#{member.discriminator} in {welcome_channel.name}")
                 else:
-                    logger.warning(f"Welcome sound file not found at {Config.WELCOME_SOUND_PATH}")
+                    voice_logger.warning(f"Welcome sound file not found at {Config.WELCOME_SOUND_PATH}")
             except Exception as e:
-                logger.error(f"Error playing welcome sound: {str(e)}")
+                voice_logger.error(f"Error playing welcome sound: {str(e)}")
 
     @app_commands.command(
         name="testsound",
@@ -84,7 +91,7 @@ class VoiceCommands(Cog):
         """Test the welcome sound"""
         try:
             # Log FFmpeg path being used
-            logger.info(f"Using FFmpeg path: {self.ffmpeg_path}")
+            voice_logger.info(f"Using FFmpeg path: {self.ffmpeg_path}")
             
             # Verify FFmpeg exists
             if not os.path.isfile(self.ffmpeg_path) and self.ffmpeg_path != "ffmpeg":
@@ -124,12 +131,12 @@ class VoiceCommands(Cog):
                 
                 if not self.voice_client.is_playing():
                     self.voice_client.play(transformed_source)
-                    logger.info(f"Testing welcome sound in {welcome_channel.name}")
+                    voice_logger.info(f"Testing welcome sound in {welcome_channel.name}")
             else:
                 await interaction.followup.send("*لم يتم تكوين ملف الصوت.*")
 
         except Exception as e:
-            logger.error(f"Error testing welcome sound: {str(e)}")
+            voice_logger.error(f"Error testing welcome sound: {str(e)}")
             await interaction.followup.send(f"*حدث خطأ أثناء تشغيل الصوت: {str(e)}*")
 
     @app_commands.command(
@@ -156,14 +163,14 @@ class VoiceCommands(Cog):
             if self.voice_client.source:
                 self.voice_client.source.volume = volume
                 await interaction.response.send_message(f"*تم تغيير مستوى الصوت الى {volume}*")
-                logger.info(f"Volume changed to {volume} by {interaction.user.name}#{interaction.user.discriminator}")
+                voice_logger.info(f"Volume changed to {volume} by {interaction.user.name}#{interaction.user.discriminator}")
             else:
                 await interaction.response.send_message(
                     "*لا يوجد صوت قيد التشغيل.*",
                     ephemeral=True
                 )
         except Exception as e:
-            logger.error(f"Error changing volume: {str(e)}")
+            voice_logger.error(f"Error changing volume: {str(e)}")
             await interaction.response.send_message(
                 "*حدث خطأ أثناء تغيير مستوى الصوت.*",
                 ephemeral=True
@@ -182,7 +189,7 @@ class VoiceCommands(Cog):
                 ephemeral=True
             )
         else:
-            logger.error(f"Voice command error: {str(error)}")
+            voice_logger.error(f"Voice command error: {str(error)}")
             await interaction.response.send_message(
                 "*حدث خطأ غير متوقع.*",
                 ephemeral=True
