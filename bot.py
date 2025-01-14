@@ -52,6 +52,35 @@ class ArabLifeBot(commands.Bot):
         except Exception as e:
             print(f'Failed to load extensions: {str(e)}')
 
+    async def on_error(self, event_method: str, *args, **kwargs) -> None:
+        """Global error handler for all events"""
+        print(f'Error in {event_method}: {args} {kwargs}')
+        await super().on_error(event_method, *args, **kwargs)
+
+    async def on_app_command_error(self, interaction: discord.Interaction, error: discord.app_commands.AppCommandError) -> None:
+        """Error handler for application commands"""
+        try:
+            if isinstance(error, discord.app_commands.CommandInvokeError):
+                error = error.original
+
+            if isinstance(error, discord.NotFound) and error.code == 10062:
+                # Interaction has expired - ignore this error
+                return
+            
+            error_message = f"An error occurred: {str(error)}"
+            
+            try:
+                if interaction.response.is_done():
+                    await interaction.followup.send(error_message, ephemeral=True)
+                else:
+                    await interaction.response.send_message(error_message, ephemeral=True)
+            except discord.NotFound:
+                # If we can't respond to the interaction, log it
+                print(f"Failed to respond to interaction: {error_message}")
+                
+        except Exception as e:
+            print(f"Error in error handler: {str(e)}")
+
     async def on_ready(self) -> None:
         """Event triggered when the bot is ready"""
         print('='*50)
