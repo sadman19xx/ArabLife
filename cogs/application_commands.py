@@ -22,26 +22,23 @@ class ApplicationCommands(commands.Cog):
             await interaction.response.send_message("You don't have permission to use this command.", ephemeral=True)
             return
 
-        # First acknowledge the interaction
-        await interaction.response.defer(ephemeral=True)
-
         try:
             # Get the response channel
             response_channel = self.bot.get_channel(self.response_channel_id)
             if not response_channel:
-                await interaction.followup.send("Could not find the response channel.", ephemeral=True)
+                await interaction.response.send_message("Could not find the response channel.", ephemeral=True)
                 return
 
             # Get the citizen role
             citizen_role = interaction.guild.get_role(self.citizen_role_id)
             if not citizen_role:
-                await interaction.followup.send("Could not find the citizen role.", ephemeral=True)
+                await interaction.response.send_message("Could not find the citizen role.", ephemeral=True)
                 return
 
             # Add the role to the user
             await user.add_roles(citizen_role)
 
-            # Send response message with approved visa image
+            # Create and send response message with approved visa image
             embed = discord.Embed(
                 title="Application Response",
                 description=f"{user.mention} Visa Application Has Been Approved!\n\nAccepted By: {interaction.user.mention}",
@@ -56,10 +53,10 @@ class ApplicationCommands(commands.Cog):
             await response_channel.send(embed=embed, file=file)
             
             # Send success message
-            await interaction.followup.send(f"Successfully approved {user.mention}'s application.", ephemeral=True)
+            await interaction.response.send_message(f"Successfully approved {user.mention}'s application.", ephemeral=True)
 
         except Exception as e:
-            await interaction.followup.send(f"An error occurred: {str(e)}", ephemeral=True)
+            await interaction.response.send_message(f"An error occurred: {str(e)}", ephemeral=True)
 
     @app_commands.command(name="reject", description="Reject a user's application")
     async def reject(self, interaction: discord.Interaction, user: discord.Member, reason: str):
@@ -68,17 +65,14 @@ class ApplicationCommands(commands.Cog):
             await interaction.response.send_message("You don't have permission to use this command.", ephemeral=True)
             return
 
-        # First acknowledge the interaction
-        await interaction.response.defer(ephemeral=True)
-
         try:
             # Get the response channel
             response_channel = self.bot.get_channel(self.response_channel_id)
             if not response_channel:
-                await interaction.followup.send("Could not find the response channel.", ephemeral=True)
+                await interaction.response.send_message("Could not find the response channel.", ephemeral=True)
                 return
 
-            # Send response message with rejected visa image
+            # Create and send response message with rejected visa image
             embed = discord.Embed(
                 title="Application Response",
                 description=f"{user.mention} Visa Application Has Been Rejected!\n\nRejected By: {interaction.user.mention}\nReason: {reason}",
@@ -93,10 +87,10 @@ class ApplicationCommands(commands.Cog):
             await response_channel.send(embed=embed, file=file)
             
             # Send success message
-            await interaction.followup.send(f"Successfully rejected {user.mention}'s application.", ephemeral=True)
+            await interaction.response.send_message(f"Successfully rejected {user.mention}'s application.", ephemeral=True)
 
         except Exception as e:
-            await interaction.followup.send(f"An error occurred: {str(e)}", ephemeral=True)
+            await interaction.response.send_message(f"An error occurred: {str(e)}", ephemeral=True)
 
 async def setup(bot):
     await bot.add_cog(ApplicationCommands(bot))
