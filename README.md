@@ -115,7 +115,7 @@ FFMPEG_PATH=/usr/bin/ffmpeg
 
 ## Running the Bot
 
-### Method 1: Manual Run
+### Method 1: Manual Run (Development)
 
 ```bash
 ./run.sh
@@ -126,35 +126,58 @@ The run script will:
 - Activate the virtual environment
 - Start the bot
 
-### Method 2: Systemd Service (Recommended)
+### Method 2: Systemd Service (Production Recommended)
 
-The bot can run as a systemd service that automatically starts with the system and restarts on crashes:
+For production environments, run the bot as a systemd service for:
+- Automatic startup on system boot
+- Automatic restart on crashes (3-second delay)
+- Proper logging and monitoring
+- Process management
 
-1. Install the service:
+Installation Steps:
+
+1. First install the bot and configure .env:
+```bash
+sudo ./install.sh
+# Configure your .env file
+```
+
+2. Install the service:
 ```bash
 sudo ./install-service.sh
 ```
 
-The service installation will:
-- Set up logging to /var/log/arablife-bot.log
-- Configure automatic restart on crashes
-- Enable startup at boot
+The service installation:
+- Creates necessary log files in /var/log/
+- Sets up proper permissions
+- Creates required directories
+- Configures systemd service
+- Enables automatic startup
+- Starts the service
 
-Managing the service:
+Service Management:
+
 ```bash
-# Check service status
+# View detailed status
 sudo systemctl status arablife-bot
 
-# View live logs
-sudo journalctl -u arablife-bot -f
-# or
-tail -f /var/log/arablife-bot.log
+# View logs (multiple options)
+sudo journalctl -u arablife-bot -f             # Live systemd logs
+tail -f /var/log/arablife-bot.log             # Application logs
+tail -f /var/log/arablife-bot.error.log       # Error logs
 
-# Start/Stop/Restart
-sudo systemctl start arablife-bot
-sudo systemctl stop arablife-bot
-sudo systemctl restart arablife-bot
+# Control commands
+sudo systemctl start arablife-bot              # Start the bot
+sudo systemctl stop arablife-bot               # Stop the bot
+sudo systemctl restart arablife-bot            # Restart the bot
 ```
+
+Service Features:
+- Runs in virtual environment
+- Automatic directory creation
+- Proper PATH and PYTHONPATH setup
+- Log rotation and management
+- Process monitoring and recovery
 
 ## Troubleshooting
 
@@ -170,10 +193,14 @@ sudo systemctl restart arablife-bot
 
 3. Runtime Issues:
    - Check systemd service logs: `sudo journalctl -u arablife-bot -f`
-   - Check log files in /var/log/arablife-bot.log
+   - Check application logs: `tail -f /var/log/arablife-bot.log`
+   - Check error logs: `tail -f /var/log/arablife-bot.error.log`
    - Verify bot permissions in Discord
    - Ensure FFmpeg is properly installed
-   - If service won't start, check permissions and paths in arablife-bot.service
+   - Check service configuration: `sudo systemctl cat arablife-bot`
+   - Check service status: `sudo systemctl status arablife-bot`
+   - Verify file permissions: `ls -la /root/ArabLife/`
+   - Check virtual environment: `ls -la /root/ArabLife/venv/`
 
 ## Support
 

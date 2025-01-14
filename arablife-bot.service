@@ -1,14 +1,33 @@
 [Unit]
 Description=ArabLife Discord Bot
 After=network.target
+StartLimitIntervalSec=0
 
 [Service]
 Type=simple
 User=root
 WorkingDirectory=/root/ArabLife
-ExecStart=/root/ArabLife/venv/bin/python bot.py
+
+# Environment setup
+Environment=PATH=/root/ArabLife/venv/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+Environment=PYTHONPATH=/root/ArabLife
+Environment=VIRTUAL_ENV=/root/ArabLife/venv
+
+# Create required directories
+ExecStartPre=/bin/mkdir -p /root/ArabLife/logs
+ExecStartPre=/bin/mkdir -p /root/ArabLife/data
+ExecStartPre=/bin/chmod 755 /root/ArabLife/logs
+ExecStartPre=/bin/chmod 755 /root/ArabLife/data
+
+# Start the bot
+ExecStart=/root/ArabLife/venv/bin/python3 /root/ArabLife/bot.py
+
+# Restart configuration
 Restart=always
-RestartSec=10
+RestartSec=3
+StartLimitBurst=0
+
+# Logging
 StandardOutput=append:/var/log/arablife-bot.log
 StandardError=append:/var/log/arablife-bot.error.log
 
