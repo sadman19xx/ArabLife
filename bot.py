@@ -5,6 +5,11 @@ import os
 from config import Config
 from utils.logger import setup_logging
 
+# Disable unnecessary discord.py logging
+for logger_name in ['discord', 'discord.client', 'discord.gateway', 'discord.http']:
+    logger = logging.getLogger(logger_name)
+    logger.setLevel(logging.ERROR)  # Only show errors
+
 # Set up intents with required privileges
 intents = discord.Intents.default()
 intents.members = True

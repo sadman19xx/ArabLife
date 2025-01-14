@@ -126,9 +126,7 @@ class AuditHandler(logging.Handler):
         self.bot = bot
         self.channel_id = channel_id
         self.important_events = {
-            'rule_update', 'command_update', 'settings_change',
-            'automod_update', 'role_update', 'channel_update',
-            'ban', 'unban', 'kick'
+            'ban', 'unban', 'kick'  # Only log critical moderation events
         }
         
     def emit(self, record: logging.LogRecord):
