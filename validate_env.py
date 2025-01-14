@@ -25,30 +25,17 @@ def validate_env():
     optional_vars = {
         'WELCOME_VOICE_CHANNEL_ID': '1309595750878937240',
         'WELCOME_SOUND_PATH': 'welcome.mp3',
-        'DEFAULT_VOLUME': '0.5',
-        'LOG_TO_FILE': '1',
+        'FFMPEG_PATH': '/usr/bin/ffmpeg',  # Path to FFMPEG for voice functionality
         'LOG_LEVEL': 'INFO',
+        'LOG_TO_FILE': 'false',
         'LOG_FORMAT': '%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-        'LOG_DIR': 'logs',
-        'AUTOMOD_ENABLED': '1',
-        'AUTOMOD_ACTION': 'warn',
-        'AUTOMOD_SPAM_THRESHOLD': '5',
-        'AUTOMOD_SPAM_INTERVAL': '5',
-        'AUTOMOD_RAID_THRESHOLD': '10',
-        'AUTOMOD_RAID_INTERVAL': '10',
-        'XP_PER_MESSAGE': '15',
-        'XP_COOLDOWN': '60',
-        'HEALTH_CHECK_HOST': '127.0.0.1',
-        'HEALTH_CHECK_PORT': '8080',
-        'HEALTH_CHECK_METRICS_COOLDOWN': '60'
+        'LOG_DIR': 'logs'
     }
     
     # Optional channel IDs (will be 0 if not set)
     channel_vars = {
-        'ROLE_ACTIVITY_LOG_CHANNEL_ID': 'Channel for role change logs',
-        'AUDIT_LOG_CHANNEL_ID': 'Channel for audit logs',
         'ERROR_LOG_CHANNEL_ID': 'Channel for error logs',
-        'LEVEL_UP_CHANNEL_ID': 'Channel for level up announcements'
+        'AUDIT_LOG_CHANNEL_ID': 'Channel for audit logs'
     }
     
     # Print current configuration
