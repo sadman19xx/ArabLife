@@ -31,7 +31,6 @@ class ArabLifeBot(commands.Bot):
             'cogs.welcome_commands',
             'cogs.application_commands',
             'cogs.help_commands',
-            'cogs.security_commands',
             'cogs.voice_commands'
         ]
         

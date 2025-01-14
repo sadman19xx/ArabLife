@@ -20,6 +20,8 @@ class Config:
     
     # Voice settings
     FFMPEG_PATH = os.getenv('FFMPEG_PATH', '/usr/bin/ffmpeg')  # Default Linux path
+    DEFAULT_VOLUME = float(os.getenv('DEFAULT_VOLUME', '0.5'))  # Default to 50% volume
+    SOUND_COMMAND_COOLDOWN = int(os.getenv('SOUND_COMMAND_COOLDOWN', '30'))  # Default 30 seconds cooldown
     
     # Logging settings
     LOG_LEVEL = os.getenv('LOG_LEVEL', 'INFO')  # Set to INFO to reduce spam, only ERROR and above go to error channel
