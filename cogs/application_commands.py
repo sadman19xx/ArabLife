@@ -22,17 +22,20 @@ class ApplicationCommands(commands.Cog):
             await interaction.response.send_message("You don't have permission to use this command.", ephemeral=True)
             return
 
+        # First acknowledge the interaction
+        await interaction.response.defer(ephemeral=True)
+
         try:
             # Get the response channel
             response_channel = self.bot.get_channel(self.response_channel_id)
             if not response_channel:
-                await interaction.response.send_message("Could not find the response channel.", ephemeral=True)
+                await interaction.followup.send("Could not find the response channel.", ephemeral=True)
                 return
 
             # Get the citizen role
             citizen_role = interaction.guild.get_role(self.citizen_role_id)
             if not citizen_role:
-                await interaction.response.send_message("Could not find the citizen role.", ephemeral=True)
+                await interaction.followup.send("Could not find the citizen role.", ephemeral=True)
                 return
 
             # Add the role to the user
@@ -52,11 +55,11 @@ class ApplicationCommands(commands.Cog):
             # Send the embed to the response channel
             await response_channel.send(embed=embed, file=file)
             
-            # Use followup to send the success message
-            await interaction.response.send_message(f"Successfully approved {user.mention}'s application.", ephemeral=True)
+            # Send success message
+            await interaction.followup.send(f"Successfully approved {user.mention}'s application.", ephemeral=True)
 
         except Exception as e:
-            await interaction.response.send_message(f"An error occurred: {str(e)}", ephemeral=True)
+            await interaction.followup.send(f"An error occurred: {str(e)}", ephemeral=True)
 
     @app_commands.command(name="reject", description="Reject a user's application")
     async def reject(self, interaction: discord.Interaction, user: discord.Member, reason: str):
@@ -65,11 +68,14 @@ class ApplicationCommands(commands.Cog):
             await interaction.response.send_message("You don't have permission to use this command.", ephemeral=True)
             return
 
+        # First acknowledge the interaction
+        await interaction.response.defer(ephemeral=True)
+
         try:
             # Get the response channel
             response_channel = self.bot.get_channel(self.response_channel_id)
             if not response_channel:
-                await interaction.response.send_message("Could not find the response channel.", ephemeral=True)
+                await interaction.followup.send("Could not find the response channel.", ephemeral=True)
                 return
 
             # Send response message with rejected visa image
@@ -86,11 +92,11 @@ class ApplicationCommands(commands.Cog):
             # Send the embed to the response channel
             await response_channel.send(embed=embed, file=file)
             
-            # Use followup to send the success message
-            await interaction.response.send_message(f"Successfully rejected {user.mention}'s application.", ephemeral=True)
+            # Send success message
+            await interaction.followup.send(f"Successfully rejected {user.mention}'s application.", ephemeral=True)
 
         except Exception as e:
-            await interaction.response.send_message(f"An error occurred: {str(e)}", ephemeral=True)
+            await interaction.followup.send(f"An error occurred: {str(e)}", ephemeral=True)
 
 async def setup(bot):
     await bot.add_cog(ApplicationCommands(bot))
