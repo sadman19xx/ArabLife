@@ -1,176 +1,133 @@
-# دليل إعداد البوت
+# ArabLife Bot Setup Guide
 
-هذا الدليل سيساعدك في إعداد وتشغيل البوت بشكل صحيح.
+This guide will walk you through setting up the ArabLife Discord bot.
 
-## المتطلبات الأساسية
+## Prerequisites
 
-1. Python 3.8 أو أحدث
-2. FFmpeg (للميزات الصوتية)
-3. توكن بوت Discord
-4. معرف السيرفر (Guild ID)
+- Python 3.8 or higher
+- pip (Python package manager)
+- A Discord account
+- A Discord application and bot token
 
-## خطوات الإعداد
+## Step 1: Create a Discord Application
 
-1. قم بنسخ ملف `.env.example` إلى `.env`:
+1. Go to the [Discord Developer Portal](https://discord.com/developers/applications)
+2. Click "New Application" and give it a name
+3. Go to the "Bot" section and click "Add Bot"
+4. Copy your bot token (you'll need this later)
+5. Enable necessary Privileged Gateway Intents:
+   - Presence Intent
+   - Server Members Intent
+   - Message Content Intent
+
+## Step 2: Clone and Configure the Bot
+
+1. Clone the repository to your local machine
+2. Create a `.env` file in the root directory using `.env.example` as a template:
+   ```
+   # Copy the .env.example file
+   cp .env.example .env
+   ```
+3. Open the `.env` file and fill in your configuration:
+   - `DISCORD_TOKEN`: Your bot token from Step 1
+   - Other required environment variables as specified in the file
+
+## Step 3: Installation
+
+1. Run the installation script:
+   ```bash
+   chmod +x install.sh
+   ./install.sh
+   ```
+   This will:
+   - Create a virtual environment
+   - Install required Python packages
+   - Set up the database
+
+## Step 4: Running the Bot
+
+1. Start the bot using the run script:
+   ```bash
+   chmod +x run.sh
+   ./run.sh
+   ```
+
+## Available Commands
+
+The bot includes several modules with different functionalities:
+
+- **Application Commands**: Handle user applications
+- **Help Commands**: Display bot commands and usage
+- **Role Commands**: Manage server roles
+- **Security Commands**: Security features
+- **Status Commands**: Bot and server status
+- **Voice Commands**: Voice channel management
+- **Welcome Commands**: Welcome new members
+
+## Troubleshooting
+
+If you encounter any issues:
+
+1. Verify your `.env` file is properly configured
+2. Check the bot logs for error messages
+3. Ensure all required permissions are granted to the bot
+4. Verify Python version compatibility
+5. Check if all dependencies are properly installed
+
+## System Service (Linux)
+
+For Linux systems, you can set up the bot as a system service:
+
+1. Copy the service file:
+   ```bash
+   sudo cp arablife-bot.service /etc/systemd/system/
+   ```
+2. Enable and start the service:
+   ```bash
+   sudo systemctl enable arablife-bot
+   sudo systemctl start arablife-bot
+   ```
+3. Check service status:
+   ```bash
+   sudo systemctl status arablife-bot
+   ```
+
+## Logging Configuration
+
+The bot uses specific Discord channels for different types of logs:
+
+1. Error Logs Channel (ID: 1327648816874262549)
+   - Critical errors and exceptions
+   - System warnings
+   - Important runtime issues
+
+2. Audit Logs Channel (ID: 1286684861234417704)
+   - Administrative actions
+   - Rule changes
+   - Server configuration updates
+   - Moderation actions
+
+Note: The bot is configured to minimize log spam by only logging important events.
+
+## Environment Validation
+
+Before running the bot, you can validate your environment configuration:
 ```bash
-cp .env.example .env
+python validate_env.py
 ```
 
-2. قم بتعديل ملف `.env` وإضافة المعلومات المطلوبة:
-- `TOKEN`: توكن البوت من [Discord Developer Portal](https://discord.com/developers/applications)
-- `GUILD_ID`: معرف السيرفر
-- معرفات القنوات والرتب المطلوبة
+## Support
 
-3. قم بتثبيت المتطلبات البرمجية:
-```bash
-pip install -r requirements.txt
-```
+If you need help or encounter issues:
+1. Check the documentation in README.md
+2. Review error logs in the logs directory
+3. Verify all environment variables are properly set
+4. Ensure all required bot permissions are configured in Discord
 
-4. قم بتشغيل البوت:
-```bash
-python bot.py
-```
+## Security Notes
 
-## إعداد الميزات
-
-### نظام التذاكر
-
-1. قم بإنشاء:
-   - رتبة للموظفين (`TICKET_STAFF_ROLE_ID`)
-   - فئة للتذاكر (`TICKET_CATEGORY_ID`)
-   - قناة لسجلات التذاكر (`TICKET_LOG_CHANNEL_ID`)
-   - رتب للأقسام المختلفة (شكاوى اللاعبين، الصحة، الداخلية، الاقتراحات)
-
-2. أضف المعرفات في ملف `.env`
-
-3. استخدم الأمر `/setup-tickets` في القناة المطلوبة
-
-### نظام الحماية
-
-1. قم بتكوين إعدادات الحماية في `.env`:
-   - `WARNING_THRESHOLD`: عدد التحذيرات قبل اتخاذ إجراء
-   - `WARNING_ACTION`: نوع الإجراء (timeout, kick, ban)
-   - `RAID_PROTECTION`: تفعيل الحماية من الهجمات
-   - `SPAM_DETECTION`: تفعيل الحماية من الرسائل المكررة
-
-2. حدد الرتب المستثناة من الفحوصات الأمنية في `EXEMPT_ROLES`
-
-### نظام المستويات
-
-1. قم بتكوين إعدادات المستويات في `.env`:
-   - `XP_PER_MESSAGE`: نقاط الخبرة لكل رسالة
-   - `XP_COOLDOWN`: الوقت بين كل منح للنقاط
-   - `ROLE_REWARDS`: الرتب التي تُمنح عند الوصول لمستويات معينة
-
-2. حدد قناة إعلانات المستويات في `LEVEL_UP_CHANNEL_ID`
-
-### نظام المراقبة الآلي
-
-1. قم بتكوين إعدادات المراقبة في `.env`:
-   - `AUTOMOD_SPAM_THRESHOLD`: عدد الرسائل المسموح في الفترة المحددة
-   - `AUTOMOD_RAID_THRESHOLD`: عدد الانضمامات التي تعتبر هجوماً
-   - `AUTOMOD_ACTION`: الإجراء المتخذ عند المخالفة
-
-2. حدد القنوات والرتب المستثناة في:
-   - `AUTOMOD_IGNORED_CHANNELS`
-   - `AUTOMOD_IGNORED_ROLES`
-
-### تكامل FiveM والقائمة البيضاء
-
-1. قم بتكوين إعدادات FiveM في `.env`:
-   - `DISCORD_BOT_TOKEN`: توكن البوت (نفس توكن البوت الرئيسي)
-   - `DISCORD_SERVER_ID`: معرف السيرفر
-
-2. أوامر القائمة البيضاء:
-   - `/whitelist add @user` - إضافة مستخدم إلى القائمة البيضاء
-   - `/whitelist remove @user` - إزالة مستخدم من القائمة البيضاء
-
-3. تكامل FiveM:
-   - البوت يوفر واجهة برمجة على المنفذ 3033
-   - يتحقق من أدوار المستخدمين تلقائياً
-   - يتكامل مع نظام ArabLife_Connecting
-
-## الأوامر المتاحة
-
-استخدم `/help` لعرض قائمة الأوامر المتاحة، أو أضف اسم الفئة للحصول على تفاصيل أكثر:
-
-- `/help tickets` - نظام التذاكر
-- `/help security` - نظام الحماية
-- `/help leveling` - نظام المستويات
-- `/help automod` - نظام المراقبة الآلي
-- `/help welcome` - نظام الترحيب
-- `/help roles` - إدارة الرتب
-- `/help voice` - إعدادات الصوت
-- `/help status` - حالة البوت
-- `/help admin` - أوامر الإدارة
-
-## السجلات والمراقبة
-
-1. السجلات تُحفظ في:
-   - ملف السجلات: `logs/bot.log`
-   - قناة الأخطاء: `ERROR_LOG_CHANNEL_ID`
-   - قناة المراقبة: `AUDIT_LOG_CHANNEL_ID`
-   - قناة نشاط الرتب: `ROLE_ACTIVITY_LOG_CHANNEL_ID`
-
-2. يمكن تعديل إعدادات السجلات في `.env`:
-   - `LOG_LEVEL`: مستوى تفصيل السجلات
-   - `LOG_MAX_BYTES`: الحجم الأقصى لملف السجلات
-   - `LOG_BACKUP_COUNT`: عدد نسخ السجلات القديمة
-
-## حل المشاكل
-
-1. **البوت لا يستجيب للأوامر**:
-   - تأكد من صحة التوكن
-   - تأكد من تفعيل Privileged Gateway Intents
-   - تحقق من صلاحيات البوت في السيرفر
-
-2. **مشاكل في نظام التذاكر**:
-   - تأكد من صحة معرفات الرتب والقنوات
-   - تحقق من صلاحيات البوت في فئة التذاكر
-
-3. **مشاكل في الميزات الصوتية**:
-   - تأكد من تثبيت FFmpeg
-   - تحقق من مسار FFmpeg في `.env`
-
-4. **أخطاء في قاعدة البيانات**:
-   - تأكد من وجود مجلد `data`
-   - تحقق من صلاحيات الكتابة
-
-## الأمان والحماية
-
-1. احمِ ملف `.env`:
-   - لا تشارك الملف أبداً
-   - أضفه إلى `.gitignore`
-   - استخدم صلاحيات ملف محدودة
-
-2. راقب سجلات البوت:
-   - تحقق من السجلات بانتظام
-   - اضبط تنبيهات للأحداث المهمة
-
-3. حافظ على تحديث البوت:
-   - تابع التحديثات الأمنية
-   - حدّث المكتبات بانتظام
-
-## الدعم
-
-إذا واجهت أي مشاكل:
-1. تحقق من السجلات
-2. راجع هذا الدليل
-3. تأكد من صحة الإعدادات
-4. تواصل مع فريق الدعم
-
-## تحديث البوت
-
-1. احصل على آخر التحديثات:
-```bash
-git pull origin main
-```
-
-2. حدّث المتطلبات:
-```bash
-pip install -r requirements.txt
-```
-
-3. راجع التغييرات في `.env.example`
-
-4. أعد تشغيل البوت
+1. Never share your bot token
+2. Keep your `.env` file secure
+3. Regularly update dependencies
+4. Monitor bot logs for suspicious activity
+5. Regularly backup your database

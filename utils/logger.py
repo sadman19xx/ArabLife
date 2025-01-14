@@ -92,8 +92,8 @@ class DiscordHandler(logging.Handler):
             msg = self.queue.pop(0)
             self.bot.loop.create_task(channel.send(f"```\n{msg}\n```"))
 
-class RoleActivityHandler(logging.Handler):
-    """Custom logging handler for role-related activity"""
+class ErrorHandler(logging.Handler):
+    """Custom logging handler for error messages"""
     
     def __init__(self, bot: discord.Client, channel_id: int):
         super().__init__()
@@ -101,25 +101,62 @@ class RoleActivityHandler(logging.Handler):
         self.channel_id = channel_id
         
     def emit(self, record: logging.LogRecord):
-        """Emit a role activity log record to Discord"""
-        if not self.bot.is_ready():
+        """Emit an error log record to Discord"""
+        if not self.bot.is_ready() or record.levelno < logging.ERROR:
             return
             
         try:
             channel = self.bot.get_channel(self.channel_id)
             if channel:
                 embed = discord.Embed(
-                    title="Role Update",
-                    description=self.format(record),
-                    color=discord.Color.blue()
+                    title="⚠️ Error",
+                    description=f"```\n{self.format(record)}\n```",
+                    color=discord.Color.red(),
+                    timestamp=discord.utils.utcnow()
                 )
                 self.bot.loop.create_task(channel.send(embed=embed))
         except Exception as e:
-            print(f"Failed to log role activity: {e}", file=sys.stderr)
+            print(f"Failed to log error: {e}", file=sys.stderr)
+
+class AuditHandler(logging.Handler):
+    """Custom logging handler for audit logs"""
+    
+    def __init__(self, bot: discord.Client, channel_id: int):
+        super().__init__()
+        self.bot = bot
+        self.channel_id = channel_id
+        self.important_events = {
+            'rule_update', 'command_update', 'settings_change',
+            'automod_update', 'role_update', 'channel_update',
+            'ban', 'unban', 'kick'
+        }
+        
+    def emit(self, record: logging.LogRecord):
+        """Emit an audit log record to Discord"""
+        if not self.bot.is_ready():
+            return
+            
+        # Only log important events
+        event_type = getattr(record, 'event_type', None)
+        if not event_type or event_type not in self.important_events:
+            return
+            
+        try:
+            channel = self.bot.get_channel(self.channel_id)
+            if channel:
+                embed = discord.Embed(
+                    title="📝 Audit Log",
+                    description=self.format(record),
+                    color=discord.Color.blue(),
+                    timestamp=discord.utils.utcnow()
+                )
+                self.bot.loop.create_task(channel.send(embed=embed))
+        except Exception as e:
+            print(f"Failed to log audit event: {e}", file=sys.stderr)
 
 def setup_logging(
     bot: discord.Client,
-    role_log_channel: Optional[int] = None,
+    error_log_channel: Optional[int] = None,
     audit_log_channel: Optional[int] = None
 ) -> logging.Logger:
     """Set up logging configuration"""
@@ -149,14 +186,15 @@ def setup_logging(
         logger.addHandler(file_handler)
     
     # Discord channel handlers
-    if audit_log_channel:
-        discord_handler = DiscordHandler(bot, audit_log_channel)
-        discord_handler.setFormatter(logging.Formatter('%(message)s'))
-        logger.addHandler(discord_handler)
+    if error_log_channel:
+        error_handler = ErrorHandler(bot, error_log_channel)
+        error_handler.setFormatter(logging.Formatter('%(asctime)s - %(name)s - %(message)s'))
+        error_handler.setLevel(logging.ERROR)
+        logger.addHandler(error_handler)
     
-    if role_log_channel:
-        role_handler = RoleActivityHandler(bot, role_log_channel)
-        role_handler.setFormatter(logging.Formatter('%(message)s'))
-        logger.addHandler(role_handler)
+    if audit_log_channel:
+        audit_handler = AuditHandler(bot, audit_log_channel)
+        audit_handler.setFormatter(logging.Formatter('%(message)s'))
+        logger.addHandler(audit_handler)
     
     return logger

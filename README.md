@@ -1,142 +1,84 @@
 # ArabLife Discord Bot
 
-Discord bot for Arabic communities with welcome system, role management, and security features.
-
-## Ubuntu Server Installation
-
-1. Update system and install dependencies:
-```bash
-sudo apt update
-sudo apt install -y git python3 python3-pip python3-venv ffmpeg
-```
-
-2. Clone and setup:
-```bash
-git clone https://github.com/yourusername/arablife.git
-cd arablife
-chmod +x install.sh run.sh
-./install.sh
-```
-
-3. Add required files:
-- Place `welcome.mp3` in the root directory
-- Place `arabic.ttf` in the `fonts` directory
-- Edit `.env` with your bot settings
-
-4. Start the bot:
-```bash
-./run.sh
-```
-
-5. For production deployment:
-```bash
-sudo systemctl start arablife-bot
-sudo systemctl enable arablife-bot
-```
+A Discord bot for managing server roles and welcoming new members.
 
 ## Features
 
-### Welcome System
-- Custom welcome images with Arabic text
-- Welcome sound in voice channel
-- Configurable messages
+1. Application Approval/Denial System
+   - `/accept @User` - Accepts a user's application and assigns the citizen role
+   - `/reject @User [reason]` - Rejects a user's application with a specified reason
+   - Automated response messages with visa images
+   - Role-based permissions for staff members
 
-### Role Management
-- Visa role system (`مقبول`, `مرفوض`)
-- Role tracking
-- Permission-based commands
+2. Welcome Voice System
+   - Plays a custom welcome sound when new members join
+   - Automatically disconnects after playing the sound
 
-### Security
-- Raid protection
-- Spam detection
-- Warning system
-- Word blacklist
+## Requirements
 
-### Ticket System
-- Department-based tickets
-- Ticket logging
-- Staff management
+- Python 3.8 or higher
+- FFmpeg installed on your system
+- A Discord bot token
+- Welcome sound file (MP3 format)
+- Visa images (accept.png and reject.png)
 
-## Commands
+## Setup
 
-### Welcome
-- `/setwelcomechannel` - Set welcome channel
-- `/setwelcomebackground` - Set background
-- `/testwelcome` - Test system
-
-### Roles
-- `مقبول` - Give visa role
-- `مرفوض` - Remove visa role
-
-### Security
-- `/raidmode` - Toggle raid mode
-- `/warnings` - Check warnings
-- `/clearwarnings` - Clear warnings
-- `/blacklist` - Manage blacklist
-
-### AutoMod
-- `/automod_toggle` - Toggle automod
-- `/automod_action` - Set action
-- `/automod_exempt` - Add exemptions
-- `/automod_status` - View settings
-
-## Environment Variables
-
-Key environment variables in `.env`:
-```
-TOKEN=your_bot_token
-GUILD_ID=your_guild_id
-ROLE_IDS_ALLOWED=role_id1,role_id2
-WELCOME_CHANNEL_ID=channel_id
-WELCOME_VOICE_CHANNEL_ID=channel_id
+1. Clone this repository
+2. Run the installation script:
+```bash
+chmod +x install.sh
+./install.sh
 ```
 
-See `.env.example` for all available options.
+3. Configure your bot:
+   - Copy `.env.example` to `.env` (done automatically by install script)
+   - Update the following settings in `.env`:
+     - `TOKEN`: Your Discord bot token
+     - `GUILD_ID`: Your Discord server ID
+     - `APPLICATION_ID`: Your bot's application ID
+     - `WELCOME_VOICE_CHANNEL_ID`: Voice channel ID for welcome sounds
+     - `WELCOME_SOUND_PATH`: Path to welcome sound file (default: welcome.mp3)
+     - `FFMPEG_PATH`: Path to FFmpeg executable (optional)
 
-## Project Structure
+4. Add required files:
+   - Place welcome sound file as `welcome.mp3` in the bot directory
+   - Place visa images in the `assets` directory:
+     - `accept.png` - Image shown for accepted applications
+     - `reject.png` - Image shown for rejected applications
 
+## Running the Bot
+
+```bash
+chmod +x run.sh
+./run.sh
 ```
-arablife/
-├── bot.py              # Main bot file
-├── config.py           # Configuration
-├── requirements.txt    # Python dependencies
-├── cogs/              # Bot commands
-│   ├── welcome_commands.py
-│   ├── role_commands.py
-│   └── ...
-├── utils/             # Utility functions
-│   ├── database.py
-│   ├── logger.py
-│   └── health.py
-├── fonts/            # Required fonts
-│   └── arabic.ttf
-└── data/             # Database and storage
+
+## Configuration
+
+All configuration is done through environment variables in the `.env` file:
+
+```env
+# Bot Configuration
+TOKEN=your_bot_token_here
+GUILD_ID=your_guild_id_here
+APPLICATION_ID=your_application_id_here
+
+# Welcome Voice Settings
+WELCOME_VOICE_CHANNEL_ID=your_voice_channel_id_here
+WELCOME_SOUND_PATH=welcome.mp3
+
+# Voice Settings (Optional)
+FFMPEG_PATH=/path/to/ffmpeg
+
+# Role IDs
+STAFF_ROLE_ID=1287486561914589346
+CITIZEN_ROLE_ID=1309555494586683474
+
+# Channel IDs
+RESPONSE_CHANNEL_ID=1309556312027430922
 ```
-
-## Troubleshooting
-
-1. **Welcome Sound Issues**
-   - Check `welcome.mp3` exists
-   - Verify FFmpeg installation
-   - Check voice permissions
-
-2. **Welcome Images Issues**
-   - Verify `arabic.ttf` exists
-   - Check bot permissions
-
-3. **Database Issues**
-   - Check directory permissions
-   - Verify disk space
-
-For support:
-1. Check `logs/bot.log`
-2. Verify `.env` settings
-3. Check Discord permissions
-
-## Bot Hosting
-
-For quick setup on bot-hosting platforms, see [README_BASIC.md](README_BASIC.md).
 
 ## License
 
-This project is licensed under the MIT License - see the LICENSE file for details.
+MIT License
