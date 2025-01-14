@@ -12,29 +12,33 @@ for logger_name in ['discord', 'discord.client', 'discord.gateway', 'discord.htt
 
 # Set up intents with required privileges
 intents = discord.Intents.default()
-intents.members = True
-intents.voice_states = True  # Required for voice functionality
-intents.message_content = True  # Required for commands
+intents.members = True  # Required for on_member_join event
+intents.voice_states = True  # Required for voice channel events and functionality
+intents.message_content = True  # Required for legacy commands like !testwelcome
 
 class ArabLifeBot(commands.Bot):
-    """Custom bot class for welcome voice functionality"""
+    """Custom bot class for ArabLife Discord server functionality"""
     
     def __init__(self) -> None:
         super().__init__(
-            command_prefix="!",  # Simple static prefix since we don't need command handling
+            command_prefix="!",  # Prefix for legacy commands like !testwelcome
             intents=intents,
-            case_insensitive=True
+            case_insensitive=True  # Make commands case-insensitive
         )
         
-        # List of cogs to load - only include cogs we're actually using
+        # List of cogs to load
         self.initial_extensions = [
             'cogs.welcome_commands',
-            'cogs.application_commands', 
-            'cogs.help_commands'
+            'cogs.application_commands',
+            'cogs.help_commands',
+            'cogs.role_commands',
+            'cogs.security_commands',
+            'cogs.status_commands',
+            'cogs.voice_commands'
         ]
         
-        # Clear any existing commands when starting up
-        self._clear_commands = True
+        # Don't clear existing commands
+        self._clear_commands = False
 
     async def setup_hook(self) -> None:
         """Initialize bot setup"""
