@@ -56,12 +56,14 @@ A comprehensive Discord bot for managing ArabLife server with role management, w
 
 ## Requirements
 
-- Ubuntu/Debian Linux system
+- Ubuntu/Debian Linux system (20.04 LTS or higher recommended)
 - Python 3.8 or higher
-- FFmpeg
+- FFmpeg (installed automatically via install.sh)
 - Discord bot token
 - Welcome sound file (MP3 format)
 - Visa images (accept.png and reject.png)
+
+Note: This bot is designed to run on Ubuntu/Debian systems only.
 
 ## Installation
 
