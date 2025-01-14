@@ -18,7 +18,7 @@ class Config:
     WELCOME_SOUND_PATH = os.getenv('WELCOME_SOUND_PATH', 'welcome.mp3')
     
     # Voice settings
-    FFMPEG_PATH = os.getenv('FFMPEG_PATH', '/usr/bin/ffmpeg')  # Default Ubuntu path
+    FFMPEG_PATH = os.getenv('FFMPEG_PATH', '/usr/bin/ffmpeg')  # Default Linux path
     
     # Logging settings
     LOG_LEVEL = os.getenv('LOG_LEVEL', 'INFO')  # Set to INFO to reduce spam, only ERROR and above go to error channel

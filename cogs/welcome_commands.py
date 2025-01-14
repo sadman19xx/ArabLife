@@ -9,7 +9,7 @@ class WelcomeCommands(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
         self.logger = logging.getLogger(__name__)
-        self.welcome_sound_path = os.path.join(os.path.dirname(__file__), '..', 'welcome.mp3')
+        self.welcome_sound_path = os.path.abspath('welcome.mp3')
         self.voice_client = None
 
     async def play_welcome_sound(self, voice_channel: discord.VoiceChannel):
@@ -47,7 +47,8 @@ class WelcomeCommands(commands.Cog):
                 try:
                     audio_source = discord.FFmpegPCMAudio(
                         self.welcome_sound_path,
-                        executable=Config.FFMPEG_PATH
+                        executable=Config.FFMPEG_PATH,
+                        options='-filter:a volume=2.0'  # Increase volume (2.0 = 200% volume)
                     )
                     self.voice_client.play(
                         audio_source,
@@ -65,26 +66,41 @@ class WelcomeCommands(commands.Cog):
                 await self.cleanup_voice(None)
 
     async def cleanup_voice(self, error):
-        """Cleanup voice client after playing sound"""
+        """Cleanup after playing sound but stay in channel"""
         try:
             if error:
                 self.logger.error(f"Error during playback: {str(error)}")
                 
             await asyncio.sleep(1)  # Wait a bit to ensure audio is finished
             
-            if self.voice_client:
-                if self.voice_client.is_playing():
-                    self.voice_client.stop()
-                    self.logger.info("Stopped audio playback")
-                    
-                if self.voice_client.is_connected():
-                    await self.voice_client.disconnect()
-                    self.logger.info("Disconnected from voice channel")
-                    
-                self.voice_client = None
+            if self.voice_client and self.voice_client.is_playing():
+                self.voice_client.stop()
+                self.logger.info("Stopped audio playback")
                 
         except Exception as e:
             self.logger.error(f"Error cleaning up voice client: {str(e)}")
+
+    @commands.Cog.listener()
+    async def on_ready(self):
+        """Join voice channel when bot starts"""
+        try:
+            # Get the voice channel
+            voice_channel = self.bot.get_channel(Config.WELCOME_VOICE_CHANNEL_ID)
+            if not voice_channel:
+                self.logger.error(f"Could not find voice channel with ID {Config.WELCOME_VOICE_CHANNEL_ID}")
+                return
+                
+            if not isinstance(voice_channel, discord.VoiceChannel):
+                self.logger.error(f"Channel with ID {Config.WELCOME_VOICE_CHANNEL_ID} is not a voice channel")
+                return
+
+            # Connect to voice channel if not already connected
+            if not self.voice_client or not self.voice_client.is_connected():
+                self.voice_client = await voice_channel.connect(timeout=20.0)
+                self.logger.info("Successfully connected to voice channel on startup")
+                
+        except Exception as e:
+            self.logger.error(f"Error joining voice channel on startup: {str(e)}")
 
     @commands.Cog.listener()
     async def on_member_join(self, member):

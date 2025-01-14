@@ -31,12 +31,9 @@ class ArabLifeBot(commands.Bot):
         """Initialize bot setup"""
         # Load extensions
         try:
-            await self.load_extension('cogs.welcome_commands')
-            print('Loaded welcome commands')
-            await self.load_extension('cogs.application_commands')
-            print('Loaded application commands')
-            await self.load_extension('cogs.help_commands')
-            print('Loaded help commands')
+            for extension in self.initial_extensions:
+                await self.load_extension(extension)
+                print(f'Loaded {extension}')
         except Exception as e:
             print(f'Failed to load extensions: {str(e)}')
 
