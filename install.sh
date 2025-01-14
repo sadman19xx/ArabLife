@@ -34,15 +34,37 @@ if ! command -v ffmpeg &> /dev/null; then
 fi
 echo "✅ FFmpeg installed successfully"
 
-# Create virtual environment if it doesn't exist
-if [ ! -d "venv" ]; then
-    echo "Creating Python virtual environment..."
-    python3 -m venv venv
+# Remove existing venv if it exists but is broken
+if [ -d "venv" ]; then
+    echo "Removing existing virtual environment..."
+    rm -rf venv
+fi
+
+# Create virtual environment
+echo "Creating Python virtual environment..."
+python3 -m venv venv
+
+# Verify venv creation
+if [ ! -f "venv/bin/activate" ]; then
+    echo "❌ Failed to create virtual environment"
+    echo "Trying alternative method..."
+    rm -rf venv
+    virtualenv venv
+    if [ ! -f "venv/bin/activate" ]; then
+        echo "❌ Virtual environment creation failed. Please check your Python installation."
+        exit 1
+    fi
 fi
 
 # Activate virtual environment
 echo "Activating virtual environment..."
-source venv/bin/activate
+. venv/bin/activate
+
+# Verify activation
+if [ -z "$VIRTUAL_ENV" ]; then
+    echo "❌ Virtual environment activation failed"
+    exit 1
+fi
 
 # Install Python requirements
 echo "Installing Python packages..."
