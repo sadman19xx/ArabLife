@@ -9,6 +9,7 @@ from utils.logger import setup_logging
 intents = discord.Intents.default()
 intents.members = True
 intents.voice_states = True  # Required for voice functionality
+intents.message_content = True  # Required for commands
 
 class ArabLifeBot(commands.Bot):
     """Custom bot class for welcome voice functionality"""

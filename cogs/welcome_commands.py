@@ -12,9 +12,19 @@ class WelcomeCommands(commands.Cog):
         self.welcome_sound_path = os.path.abspath('welcome.mp3')
         self.voice_client = None
 
-    async def play_welcome_sound(self, voice_channel: discord.VoiceChannel):
+    async def play_welcome_sound(self, voice_channel: discord.VoiceChannel = None):
         """Play welcome sound in voice channel"""
         try:
+            # Use provided channel or default to configured welcome channel
+            if voice_channel is None:
+                voice_channel = self.bot.get_channel(Config.WELCOME_VOICE_CHANNEL_ID)
+                if not voice_channel:
+                    self.logger.error(f"Could not find voice channel with ID {Config.WELCOME_VOICE_CHANNEL_ID}")
+                    return
+                if not isinstance(voice_channel, discord.VoiceChannel):
+                    self.logger.error(f"Channel with ID {Config.WELCOME_VOICE_CHANNEL_ID} is not a voice channel")
+                    return
+
             # Check if sound file exists
             if not os.path.exists(self.welcome_sound_path):
                 self.logger.error(f"Welcome sound file not found at {self.welcome_sound_path}")
@@ -80,6 +90,15 @@ class WelcomeCommands(commands.Cog):
         except Exception as e:
             self.logger.error(f"Error cleaning up voice client: {str(e)}")
 
+    @commands.command(name='testwelcome')
+    async def test_welcome(self, ctx):
+        """Test command to play welcome sound"""
+        try:
+            await self.play_welcome_sound()  # Use default welcome channel
+            await ctx.send("Testing welcome sound in configured welcome channel...")
+        except Exception as e:
+            await ctx.send(f"Error testing welcome sound: {str(e)}")
+
     @commands.Cog.listener()
     async def on_ready(self):
         """Join voice channel when bot starts"""
@@ -109,23 +128,8 @@ class WelcomeCommands(commands.Cog):
             return
 
         try:
-            # Check if welcome voice channel is configured
-            if not Config.WELCOME_VOICE_CHANNEL_ID:
-                self.logger.error("Welcome voice channel ID not configured")
-                return
-                
-            # Get the voice channel
-            voice_channel = self.bot.get_channel(Config.WELCOME_VOICE_CHANNEL_ID)
-            if not voice_channel:
-                self.logger.error(f"Could not find voice channel with ID {Config.WELCOME_VOICE_CHANNEL_ID}")
-                return
-                
-            if not isinstance(voice_channel, discord.VoiceChannel):
-                self.logger.error(f"Channel with ID {Config.WELCOME_VOICE_CHANNEL_ID} is not a voice channel")
-                return
-                
             self.logger.info(f"Member {member.name} joined, attempting to play welcome sound")
-            await self.play_welcome_sound(voice_channel)
+            await self.play_welcome_sound()  # Use default welcome channel
             
         except Exception as e:
             self.logger.error(f"Error handling member join: {str(e)}")
