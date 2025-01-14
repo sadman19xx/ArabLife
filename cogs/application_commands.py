@@ -44,7 +44,7 @@ class ApplicationCommands(commands.Cog):
             # Send response message with approved visa image
             embed = discord.Embed(
                 title="Application Response",
-                description=f"Your Visa Application Has Been Approved!\n\nAccepted By: {interaction.user.name}",
+                description=f"{user.mention} Visa Application Has Been Approved!\n\nAccepted By: {interaction.user.name}",
                 color=discord.Color.green()
             )
 
@@ -81,7 +81,7 @@ class ApplicationCommands(commands.Cog):
             # Send response message with rejected visa image
             embed = discord.Embed(
                 title="Application Response",
-                description=f"Your Visa Application Has Been Rejected!\n\nRejected By: {interaction.user.name}\nReason: {reason}",
+                description=f"{user.mention} Visa Application Has Been Rejected!\n\nRejected By: {interaction.user.name}\nReason: {reason}",
                 color=discord.Color.red()
             )
 
