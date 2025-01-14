@@ -47,17 +47,12 @@ class VoiceCommands(Cog):
         if member.bot:
             return
 
-        # Get the configured welcome channel
-        welcome_channel = self.bot.get_channel(Config.WELCOME_VOICE_CHANNEL_ID)
-        if not welcome_channel:
-            logger.warning("Welcome voice channel not found")
-            return
-
-        # Check if member joined the welcome channel
-        if after.channel == welcome_channel and before.channel != welcome_channel:
+        # Check if member joined the specific channel
+        if after.channel and after.channel.id == 1309595750878937240 and before.channel != after.channel:
+            welcome_channel = after.channel
             try:
-                # Only connect to voice and play sound if configured
-                if Config.WELCOME_SOUND_PATH and os.path.exists(Config.WELCOME_SOUND_PATH):
+                # Play welcome sound
+                if os.path.exists('welcome.mp3'):
                     # Connect to voice channel if not already connected
                     if not welcome_channel.guild.voice_client:
                         self.voice_client = await welcome_channel.connect()
@@ -68,7 +63,7 @@ class VoiceCommands(Cog):
 
                     # Play the welcome sound
                     audio_source = discord.FFmpegPCMAudio(
-                        Config.WELCOME_SOUND_PATH,
+                        'welcome.mp3',
                         executable=self.ffmpeg_path
                     )
                     transformed_source = discord.PCMVolumeTransformer(audio_source, volume=Config.DEFAULT_VOLUME)
@@ -101,8 +96,8 @@ class VoiceCommands(Cog):
                 )
                 return
 
-            # Get the welcome channel
-            welcome_channel = self.bot.get_channel(Config.WELCOME_VOICE_CHANNEL_ID)
+            # Get the specific welcome channel
+            welcome_channel = self.bot.get_channel(1309595750878937240)
             if not welcome_channel:
                 await interaction.response.send_message(
                     "*لم يتم العثور على قناة الترحيب.*",
@@ -112,8 +107,8 @@ class VoiceCommands(Cog):
 
             await interaction.response.send_message("*جاري تشغيل صوت الترحيب...*")
 
-            # Only connect to voice and play sound if configured
-            if Config.WELCOME_SOUND_PATH and os.path.exists(Config.WELCOME_SOUND_PATH):
+            # Play welcome sound if it exists
+            if os.path.exists('welcome.mp3'):
                 # Connect to voice channel
                 if not welcome_channel.guild.voice_client:
                     self.voice_client = await welcome_channel.connect()
@@ -124,7 +119,7 @@ class VoiceCommands(Cog):
 
                 # Play the welcome sound
                 audio_source = discord.FFmpegPCMAudio(
-                    Config.WELCOME_SOUND_PATH,
+                    'welcome.mp3',
                     executable=self.ffmpeg_path
                 )
                 transformed_source = discord.PCMVolumeTransformer(audio_source, volume=Config.DEFAULT_VOLUME)
