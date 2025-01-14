@@ -26,15 +26,23 @@ class ArabLifeBot(commands.Bot):
             case_insensitive=True
         )
         
-        # List of cogs to load
+        # List of cogs to load - only include cogs we're actually using
         self.initial_extensions = [
             'cogs.welcome_commands',
-            'cogs.application_commands',
+            'cogs.application_commands', 
             'cogs.help_commands'
         ]
+        
+        # Clear any existing commands when starting up
+        self._clear_commands = True
 
     async def setup_hook(self) -> None:
         """Initialize bot setup"""
+        # Clear existing commands if requested
+        if self._clear_commands:
+            self.tree.clear_commands(guild=None)
+            print('Cleared all existing commands')
+            
         # Load extensions
         try:
             for extension in self.initial_extensions:
