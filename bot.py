@@ -54,8 +54,12 @@ class ArabLifeBot(commands.Bot):
 
     async def on_ready(self) -> None:
         """Event triggered when the bot is ready"""
-        print(f'Logged in as {self.user.name}')
+        print('='*50)
+        print('             ARABLIFE BOT IS UP')
+        print('='*50)
+        print(f'Logged in as: {self.user.name}')
         print(f'Bot ID: {self.user.id}')
+        print(f'Start Time: {discord.utils.utcnow().strftime("%Y-%m-%d %H:%M:%S UTC")}')
         
         # Sync commands with Discord
         try:

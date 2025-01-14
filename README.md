@@ -115,6 +115,8 @@ FFMPEG_PATH=/usr/bin/ffmpeg
 
 ## Running the Bot
 
+### Method 1: Manual Run
+
 ```bash
 ./run.sh
 ```
@@ -123,6 +125,36 @@ The run script will:
 - Verify the environment is properly set up
 - Activate the virtual environment
 - Start the bot
+
+### Method 2: Systemd Service (Recommended)
+
+The bot can run as a systemd service that automatically starts with the system and restarts on crashes:
+
+1. Install the service:
+```bash
+sudo ./install-service.sh
+```
+
+The service installation will:
+- Set up logging to /var/log/arablife-bot.log
+- Configure automatic restart on crashes
+- Enable startup at boot
+
+Managing the service:
+```bash
+# Check service status
+sudo systemctl status arablife-bot
+
+# View live logs
+sudo journalctl -u arablife-bot -f
+# or
+tail -f /var/log/arablife-bot.log
+
+# Start/Stop/Restart
+sudo systemctl start arablife-bot
+sudo systemctl stop arablife-bot
+sudo systemctl restart arablife-bot
+```
 
 ## Troubleshooting
 
@@ -137,9 +169,11 @@ The run script will:
    - Verify all IDs are correct
 
 3. Runtime Issues:
-   - Check logs directory for error messages
+   - Check systemd service logs: `sudo journalctl -u arablife-bot -f`
+   - Check log files in /var/log/arablife-bot.log
    - Verify bot permissions in Discord
    - Ensure FFmpeg is properly installed
+   - If service won't start, check permissions and paths in arablife-bot.service
 
 ## Support
 
