@@ -122,13 +122,29 @@ class WelcomeCommands(commands.Cog):
             self.logger.error(f"Error joining voice channel on startup: {str(e)}")
 
     @commands.Cog.listener()
-    async def on_member_join(self, member):
-        """Play welcome sound when a member joins"""
+    async def on_voice_state_update(self, member, before, after):
+        """Play welcome sound when a member joins the welcome voice channel"""
         if member.bot:
             return
 
         try:
-            self.logger.info(f"Member {member.name} joined, attempting to play welcome sound")
+            # Check if member joined the welcome channel
+            if (before.channel != after.channel and 
+                after.channel and 
+                after.channel.id == Config.WELCOME_VOICE_CHANNEL_ID):
+                self.logger.info(f"Member {member.name} joined welcome channel, attempting to play welcome sound")
+                await self.play_welcome_sound()
+        except Exception as e:
+            self.logger.error(f"Error handling voice state update: {str(e)}")
+
+    @commands.Cog.listener()
+    async def on_member_join(self, member):
+        """Play welcome sound when a member joins the server"""
+        if member.bot:
+            return
+
+        try:
+            self.logger.info(f"Member {member.name} joined server, attempting to play welcome sound")
             await self.play_welcome_sound()  # Use default welcome channel
             
         except Exception as e:
