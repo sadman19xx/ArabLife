@@ -66,7 +66,8 @@ class ArabLifeBot(commands.Bot):
             'cogs.welcome_commands',
             'cogs.security_commands',
             'cogs.automod_commands',
-            'cogs.custom_commands'
+            'cogs.custom_commands',
+            'cogs.fivem_commands'  # Add FiveM integration
         ]
         
         # Set up error handlers

@@ -102,7 +102,7 @@ class SecurityCommands(Cog, LoggerMixin):
         if not settings['raid_protection']:
             return
             
-        now = datetime.now()
+        now = datetime.now(member.created_at.tzinfo)  # Use same timezone as member.created_at
         guild_joins = self.recent_joins[member.guild.id]
         guild_joins.append(now)
         
@@ -113,7 +113,7 @@ class SecurityCommands(Cog, LoggerMixin):
                 await self.enable_raid_mode(member.guild)
 
         # Account age check
-        account_age = now - member.created_at
+        account_age = now - member.created_at  # Now both are timezone-aware
         if account_age < timedelta(days=settings['min_account_age']):
             await self.log_security(
                 member.guild,
@@ -175,7 +175,7 @@ class SecurityCommands(Cog, LoggerMixin):
         # Check message similarity (spam)
         if len(self.user_messages[user_id]) == 10:
             if len(set(self.user_messages[user_id])) <= 2:  # If only 1-2 unique messages
-                await self.warn_user(message.author, message.guild, "spam detection")
+                await self.warn_user(message.author, message.guild, "spam detection", message.author.id)
                 await message.channel.send(
                     f"{message.author.mention} Stop spamming!",
                     delete_after=10
@@ -185,7 +185,7 @@ class SecurityCommands(Cog, LoggerMixin):
         if len(self.user_message_times[user_id]) == 5:
             time_diff = (self.user_message_times[user_id][-1] - self.user_message_times[user_id][0]).seconds
             if time_diff < 3:  # 5 messages in less than 3 seconds
-                await self.warn_user(message.author, message.guild, "message frequency")
+                await self.warn_user(message.author, message.guild, "message frequency", message.author.id)
                 await message.channel.send(
                     f"{message.author.mention} You're sending messages too quickly!",
                     delete_after=10
@@ -233,7 +233,7 @@ class SecurityCommands(Cog, LoggerMixin):
             domain = url.split('/')[2]
             if domain not in settings['allowed_domains']:
                 await message.delete()
-                await self.warn_user(message.author, message.guild, "unauthorized link")
+                await self.warn_user(message.author, message.guild, "unauthorized link", message.author.id)
                 await message.channel.send(
                     f"{message.author.mention} Unauthorized link detected!",
                     delete_after=10
@@ -243,7 +243,7 @@ class SecurityCommands(Cog, LoggerMixin):
         # Check for discord invites
         if 'discord.gg/' in message.content and not message.author.guild_permissions.create_instant_invite:
             await message.delete()
-            await self.warn_user(message.author, message.guild, "unauthorized invite")
+            await self.warn_user(message.author, message.guild, "unauthorized invite", message.author.id)
             await message.channel.send(
                 f"{message.author.mention} You're not allowed to post invite links!",
                 delete_after=10

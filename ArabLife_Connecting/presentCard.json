@@ -1,0 +1,199 @@
+[
+    {
+    "$schema": "http://adaptivecards.io/schemas/adaptive-card.json",
+    "type": "AdaptiveCard",
+    "version": "1.5",
+    "body": [
+        {
+            "type": "ColumnSet",
+            "columns": [
+                {
+                    "type": "Column",
+                    "items": [
+                        {
+                            "type": "TextBlock",
+                            "text": "Flight To Arab Life",
+                            "color": "Accent",
+                            "weight": "Bolder",
+                            "size": "ExtraLarge"
+                        },
+                        {
+                            "type": "ColumnSet",
+                            "columns": [
+                                {
+                                    "type": "Column",
+                                    "width": "stretch",
+                                    "items": [
+                                        {
+                                            "type": "TextBlock",
+                                            "text": "Queue",
+                                            "wrap": true,
+                                            "size": "Medium"
+                                        }
+                                    ]
+                                },
+                                {
+                                    "type": "Column",
+                                    "width": "stretch"
+                                }
+                            ]
+                        },
+                        {
+                            "type": "TextBlock",
+                            "text": "Time in Queue",
+                            "wrap": true,
+                            "size": "Default",
+                            "fontType": "Default",
+                            "weight": "Lighter"
+                        }
+                    ],
+                    "width": "stretch"
+                },
+                {
+                    "type": "Column",
+                    "items": [
+                        {
+                            "type": "ColumnSet",
+                            "columns": [
+                                {
+                                    "type": "Column",
+                                    "width": "stretch",
+                                    "items": [
+                                        {
+                                            "type": "TextBlock",
+                                            "text": "AL",
+                                            "wrap": true,
+                                            "horizontalAlignment": "left",
+                                            "size": "ExtraLarge"
+                                        }
+                                    ]
+                                },
+                                {
+                                    "type": "Column",
+                                    "width": "stretch",
+                                    "items": [
+                                        {
+                                            "type": "TextBlock",
+                                            "text": "LS",
+                                            "wrap": true,
+                                            "horizontalAlignment": "right",
+                                            "size": "ExtraLarge"
+                                        }
+                                    ]
+                                }
+                            ]
+                        },
+                        {
+                            "type": "ColumnSet",
+                            "columns": [
+                                {
+                                    "type": "Column",
+                                    "width": "stretch",
+                                    "items": [
+                                        {
+                                            "type": "TextBlock",
+                                            "text": "test",
+                                            "wrap": true
+                                        },
+                                        {
+                                            "type": "TextBlock",
+                                            "text": "Arab Life",
+                                            "wrap": true
+                                        }
+                                    ]
+                                },
+                                {
+                                    "type": "Column",
+                                    "width": "stretch",
+                                    "items": [
+                                        {
+                                            "type": "TextBlock",
+                                            "text": "Points",
+                                            "wrap": true,
+                                            "horizontalAlignment": "Right",
+                                            "fontType": "Default",
+                                            "weight": "Lighter"
+                                        },
+                                        {
+                                            "type": "TextBlock",
+                                            "text": "Los Santos",
+                                            "wrap": true,
+                                            "horizontalAlignment": "Right",
+                                            "fontType": "Default",
+                                            "weight": "Lighter"
+                                        }
+                                    ]
+                                }
+                            ]
+                        },
+                        {
+                            "type": "ColumnSet"
+                        },
+                        {
+                            "type": "ColumnSet",
+                            "columns": [
+                                {
+                                    "type": "Column",
+                                    "width": "stretch",
+                                    "items": [
+                                        {
+                                            "type": "ActionSet",
+                                            "horizontalAlignment": "Center",
+                                            "actions": [
+                                                {
+                                                    "type": "Action.OpenUrl",
+                                                    "title": "🌐 Website",
+                                                    "id": "website",
+                                                    "url": "https://www.arablife.gg/"
+                                                }
+                                            ]
+                                        }
+                                    ]
+                                },
+                                {
+                                    "type": "Column",
+                                    "width": "stretch",
+                                    "items": [
+                                        {
+                                            "type": "ActionSet",
+                                            "horizontalAlignment": "Center",
+                                            "actions": [
+                                                {
+                                                    "type": "Action.OpenUrl",
+                                                    "title": "💿 Discord",
+                                                    "url": "https://discord.gg/Ynz3CQ6w"
+                                                }
+                                            ]
+                                        }
+                                    ]
+                                },
+                                {
+                                    "type": "Column",
+                                    "width": "stretch",
+                                    "items": [
+                                        {
+                                            "type": "ActionSet",
+                                            "horizontalAlignment": "Center",
+                                            "actions": [
+                                                {
+                                                    "type": "Action.OpenUrl",
+                                                    "title": "📜 Server Rules",
+                                                    "id": "rules",
+                                                    "url": "https://www.arablife.gg/rules"
+                                                }
+                                            ]
+                                        }
+                                    ]
+                                }
+                            ],
+                            "separator": true,
+                            "spacing": "Medium"
+                        }
+                    ],
+                    "width": "stretch"
+                }
+            ]
+        }
+    ]
+}
+]

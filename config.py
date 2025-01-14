@@ -22,6 +22,7 @@ class Config:
     AUTOMOD_COMMAND_COOLDOWN = int(os.getenv('AUTOMOD_COMMAND_COOLDOWN', 5))
     
     # Welcome settings
+    WELCOME_CHANNEL_ID = int(os.getenv('WELCOME_CHANNEL_ID', 0))
     WELCOME_VOICE_CHANNEL_ID = int(os.getenv('WELCOME_VOICE_CHANNEL_ID', 1309595750878937240))
     WELCOME_SOUND_PATH = os.getenv('WELCOME_SOUND_PATH', 'welcome.mp3')
     DEFAULT_VOLUME = float(os.getenv('DEFAULT_VOLUME', 0.5))
@@ -57,6 +58,10 @@ class Config:
     
     # Voice settings
     FFMPEG_PATH = os.getenv('FFMPEG_PATH', '/usr/bin/ffmpeg')  # Default Linux path
+    
+    # FiveM Integration settings
+    FIVEM_API_PORT = int(os.getenv('FIVEM_API_PORT', 3033))
+    FIVEM_API_HOST = os.getenv('FIVEM_API_HOST', '127.0.0.1')
     
     @classmethod
     def validate_config(cls) -> None:
