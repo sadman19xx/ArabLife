@@ -1,133 +1,235 @@
-# ArabLife Bot Setup Guide
+# ArabLife Bot - Detailed Setup Guide
 
-This guide will walk you through setting up the ArabLife Discord bot.
+This guide provides comprehensive instructions for setting up the ArabLife Discord bot on your own server.
 
 ## Prerequisites
 
-- Python 3.8 or higher
-- pip (Python package manager)
-- A Discord account
-- A Discord application and bot token
+1. System Requirements
+   - Ubuntu/Debian Linux system
+   - Python 3.8 or higher
+   - Internet connection
+   - Sudo privileges
 
-## Step 1: Create a Discord Application
+2. Discord Requirements
+   - Discord account
+   - Server with admin permissions
+   - Bot token from Discord Developer Portal
 
-1. Go to the [Discord Developer Portal](https://discord.com/developers/applications)
-2. Click "New Application" and give it a name
-3. Go to the "Bot" section and click "Add Bot"
-4. Copy your bot token (you'll need this later)
-5. Enable necessary Privileged Gateway Intents:
+## Step 1: Discord Application Setup
+
+1. Create Application
+   - Go to [Discord Developer Portal](https://discord.com/developers/applications)
+   - Click "New Application"
+   - Name your application "ArabLife Bot" (or your preferred name)
+
+2. Bot Setup
+   - Go to the "Bot" section
+   - Click "Add Bot"
+   - Save the token (you'll need this later)
+
+3. Enable Required Intents
    - Presence Intent
    - Server Members Intent
    - Message Content Intent
 
-## Step 2: Clone and Configure the Bot
+4. Invite Bot to Server
+   - Go to OAuth2 > URL Generator
+   - Select scopes: `bot`, `applications.commands`
+   - Select required permissions:
+     - Manage Roles
+     - Manage Channels
+     - Send Messages
+     - Connect
+     - Speak
+     - Use Voice Activity
+   - Copy and use the generated URL
 
-1. Clone the repository to your local machine
-2. Create a `.env` file in the root directory using `.env.example` as a template:
-   ```
-   # Copy the .env.example file
-   cp .env.example .env
-   ```
-3. Open the `.env` file and fill in your configuration:
-   - `DISCORD_TOKEN`: Your bot token from Step 1
-   - Other required environment variables as specified in the file
+## Step 2: Installation
 
-## Step 3: Installation
+1. Clone Repository
+```bash
+git clone [repository-url]
+cd ArabLife
+```
 
-1. Run the installation script:
-   ```bash
-   chmod +x install.sh
-   ./install.sh
-   ```
-   This will:
-   - Create a virtual environment
-   - Install required Python packages
-   - Set up the database
+2. Run Installation Script
+```bash
+sudo chmod +x install.sh
+sudo ./install.sh
+```
+
+The installation script will:
+- Install system dependencies
+- Set up Python environment
+- Install required packages
+- Create configuration files
+- Set up directories
+- Configure permissions
+
+## Step 3: Configuration
+
+1. Environment Setup
+   - The install script creates `.env` from `.env.example`
+   - Edit `.env` with your settings:
+```env
+# Bot Configuration
+TOKEN=your_bot_token
+GUILD_ID=your_server_id
+APPLICATION_ID=your_bot_application_id
+
+# Channel IDs
+WELCOME_VOICE_CHANNEL_ID=voice_channel_id
+RESPONSE_CHANNEL_ID=response_channel_id
+AUDIT_LOG_CHANNEL_ID=audit_log_id
+ROLE_ACTIVITY_LOG_CHANNEL_ID=role_log_id
+
+# Role IDs
+STAFF_ROLE_ID=staff_role_id
+CITIZEN_ROLE_ID=citizen_role_id
+ROLE_ID_TO_GIVE=default_role_id
+ROLE_IDS_ALLOWED=mod_role_ids
+
+# FiveM Settings (if using FiveM integration)
+FIVEM_SERVER_IP=your_server_ip
+FIVEM_SERVER_PORT=your_server_port
+```
+
+2. Required Files
+   - Place welcome.mp3 in the bot directory
+   - Add visa images to assets/
+     - assets/accept.png
+     - assets/reject.png
+   - Verify fonts/arabic.ttf exists
+
+3. Validate Configuration
+```bash
+python3 validate_env.py
+```
 
 ## Step 4: Running the Bot
 
-1. Start the bot using the run script:
-   ```bash
-   chmod +x run.sh
-   ./run.sh
-   ```
+1. Start the Bot
+```bash
+./run.sh
+```
 
-## Available Commands
+2. Verify Operation
+   - Check bot comes online in Discord
+   - Test basic commands
+   - Verify welcome system
+   - Check role assignments
 
-The bot includes several modules with different functionalities:
+## Step 5: System Service Setup (Optional)
 
-- **Application Commands**: Handle user applications
-- **Help Commands**: Display bot commands and usage
-- **Role Commands**: Manage server roles
-- **Security Commands**: Security features
-- **Status Commands**: Bot and server status
-- **Voice Commands**: Voice channel management
-- **Welcome Commands**: Welcome new members
+1. Copy Service File
+```bash
+sudo cp arablife-bot.service /etc/systemd/system/
+```
+
+2. Edit Service File
+```bash
+sudo nano /etc/systemd/system/arablife-bot.service
+```
+Update paths in the service file to match your installation.
+
+3. Enable and Start Service
+```bash
+sudo systemctl enable arablife-bot
+sudo systemctl start arablife-bot
+```
+
+4. Check Status
+```bash
+sudo systemctl status arablife-bot
+```
+
+## Feature Configuration
+
+### 1. Application System
+- Set up application channels
+- Configure role permissions
+- Test approval/denial process
+
+### 2. Welcome System
+- Configure welcome channel
+- Test welcome sound
+- Verify image generation
+
+### 3. Role Management
+- Set up role hierarchy
+- Configure auto-roles
+- Test role commands
+
+### 4. Security Features
+- Configure audit logging
+- Set up anti-spam
+- Test verification system
+
+### 5. Voice System
+- Set up voice channels
+- Configure permissions
+- Test dynamic creation
+
+### 6. FiveM Integration
+- Configure server connection
+- Test status commands
+- Verify player tracking
 
 ## Troubleshooting
 
-If you encounter any issues:
+### Common Issues
 
-1. Verify your `.env` file is properly configured
-2. Check the bot logs for error messages
-3. Ensure all required permissions are granted to the bot
-4. Verify Python version compatibility
-5. Check if all dependencies are properly installed
+1. Bot Won't Start
+   - Check logs in logs/
+   - Verify TOKEN is correct
+   - Ensure Python version compatibility
+   - Check file permissions
 
-## System Service (Linux)
+2. Permission Errors
+   - Verify bot role position
+   - Check channel permissions
+   - Verify role hierarchy
 
-For Linux systems, you can set up the bot as a system service:
+3. Feature Issues
+   - Check specific feature logs
+   - Verify required channels exist
+   - Test with admin permissions
 
-1. Copy the service file:
-   ```bash
-   sudo cp arablife-bot.service /etc/systemd/system/
-   ```
-2. Enable and start the service:
-   ```bash
-   sudo systemctl enable arablife-bot
-   sudo systemctl start arablife-bot
-   ```
-3. Check service status:
-   ```bash
-   sudo systemctl status arablife-bot
-   ```
+### Maintenance
 
-## Logging Configuration
+1. Regular Tasks
+   - Monitor log files
+   - Update dependencies
+   - Backup configuration
+   - Check disk space
 
-The bot uses specific Discord channels for different types of logs:
+2. Updates
+   - Pull latest changes
+   - Run install script
+   - Check for breaking changes
+   - Test all features
 
-1. Error Logs Channel (ID: 1327648816874262549)
-   - Critical errors and exceptions
-   - System warnings
-   - Important runtime issues
+## Security Best Practices
 
-2. Audit Logs Channel (ID: 1286684861234417704)
-   - Administrative actions
-   - Rule changes
-   - Server configuration updates
-   - Moderation actions
+1. Token Security
+   - Never share your bot token
+   - Rotate token if compromised
+   - Use environment variables
 
-Note: The bot is configured to minimize log spam by only logging important events.
+2. Permission Management
+   - Use minimal permissions
+   - Regular audit of roles
+   - Monitor bot activities
 
-## Environment Validation
+3. System Security
+   - Keep system updated
+   - Monitor logs
+   - Regular backups
+   - Secure file permissions
 
-Before running the bot, you can validate your environment configuration:
-```bash
-python validate_env.py
-```
+## Support Resources
 
-## Support
-
-If you need help or encounter issues:
-1. Check the documentation in README.md
-2. Review error logs in the logs directory
-3. Verify all environment variables are properly set
-4. Ensure all required bot permissions are configured in Discord
-
-## Security Notes
-
-1. Never share your bot token
-2. Keep your `.env` file secure
-3. Regularly update dependencies
-4. Monitor bot logs for suspicious activity
-5. Regularly backup your database
+- Check README.md for overview
+- Review logs for errors
+- Join support server
+- Check GitHub issues

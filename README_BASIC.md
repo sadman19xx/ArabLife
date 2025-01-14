@@ -1,77 +1,142 @@
 # ArabLife Bot - Quick Setup Guide for bot-hosting.net
 
+## Features
+
+1. Application System
+   - Application approval/denial with visa images
+   - Role assignment system
+   - Staff permissions management
+
+2. Welcome System
+   - Custom welcome sounds
+   - Welcome messages
+   - Custom welcome images
+
+3. Role & Security
+   - Role management
+   - Anti-spam protection
+   - Audit logging
+
+4. Voice & Leveling
+   - Voice channel management
+   - Experience tracking
+   - Level-based roles
+
+5. FiveM Integration
+   - Server status
+   - Player management
+   - Server info display
+
+6. Support Features
+   - Ticket system
+   - Custom commands
+   - AutoMod protection
+
 ## Quick Installation
 
-### 1. Upload Files
-Zip and upload these files to your bot hosting:
-- All files in the main directory (bot.py, config.py)
-- All files in the `cogs` folder
-- All files in the `utils` folder
-- The `fonts` folder with arabic.ttf
-- The `assets` folder with visa images (accept.png, reject.png)
-
-### 2. Set Required Environment Variables
-In the bot-hosting.net control panel, add these variables:
+### 1. Required Files
+Upload these files to your bot hosting:
 ```
+bot.py
+config.py
+requirements.txt
+validate_env.py
+welcome.mp3
+cogs/
+utils/
+fonts/arabic.ttf
+assets/accept.png
+assets/reject.png
+```
+
+### 2. Environment Variables
+Add to bot-hosting.net control panel:
+```env
 # Bot Configuration
 TOKEN=your_discord_bot_token
 GUILD_ID=your_guild_id
 APPLICATION_ID=your_application_id
 
-# Welcome Voice Settings
-WELCOME_VOICE_CHANNEL_ID=your_voice_channel_id
+# Channel IDs
+WELCOME_VOICE_CHANNEL_ID=voice_channel_id
+RESPONSE_CHANNEL_ID=response_channel_id
+AUDIT_LOG_CHANNEL_ID=audit_log_id
+ROLE_ACTIVITY_LOG_CHANNEL_ID=role_log_id
+
+# Role IDs
+STAFF_ROLE_ID=staff_role_id
+CITIZEN_ROLE_ID=citizen_role_id
+ROLE_ID_TO_GIVE=default_role_id
+ROLE_IDS_ALLOWED=mod_role_ids
+
+# FiveM Settings
+FIVEM_SERVER_IP=your_server_ip
+FIVEM_SERVER_PORT=your_server_port
+
+# File Paths
 WELCOME_SOUND_PATH=welcome.mp3
-
-# Application System Role IDs
-STAFF_ROLE_ID=1287486561914589346
-CITIZEN_ROLE_ID=1309555494586683474
-
-# Application System Channel ID
-RESPONSE_CHANNEL_ID=1309556312027430922
+FFMPEG_PATH=/usr/bin/ffmpeg
 ```
 
-### 3. Set Python Version
-Set Python version to 3.8 or higher
+### 3. Bot Configuration
+1. Set Python version to 3.8 or higher
+2. Set startup command to: `python3 bot.py`
+3. Enable required intents in Discord Developer Portal:
+   - Presence Intent
+   - Server Members Intent
+   - Message Content Intent
 
-### 4. Set Startup Command
-Set to: `python bot.py`
+### 4. Start the Bot
+Click "Start" in the control panel
 
-### 5. Start the Bot
-Click the Start button in the control panel
+## Troubleshooting
 
-### Common Issues
-1. Bot won't start:
-   - Check if TOKEN is correct
-   - Make sure all files are uploaded
-   - Verify Python version is 3.8+
+### Installation Issues
+- Verify all files are uploaded
+- Check Python version (3.8+)
+- Ensure requirements.txt is present
 
-2. Commands don't work:
-   - Check if GUILD_ID is correct
-   - Verify role IDs are correct
-   - Make sure channel IDs are correct
+### Configuration Issues
+- Verify TOKEN is correct
+- Check all IDs are valid numbers
+- Ensure all required files exist
 
-3. Welcome sound doesn't play:
-   - Verify WELCOME_VOICE_CHANNEL_ID is correct
-   - Check if welcome.mp3 is uploaded
-   - Make sure the bot has voice permissions
+### Runtime Issues
+- Check bot logs for errors
+- Verify bot permissions
+- Ensure intents are enabled
 
-4. Application commands don't work:
-   - Verify STAFF_ROLE_ID and CITIZEN_ROLE_ID are correct
-   - Check if RESPONSE_CHANNEL_ID is correct
-   - Ensure visa images are in the assets folder
+### Common Problems
 
-### Features
-1. Application Approval/Denial System
-   - `/accept @User` - Accepts a user's application
-   - `/reject @User [reason]` - Rejects a user's application
-   - Automated responses with visa images
-   - Role-based staff permissions
+1. Bot Won't Start
+   - Check TOKEN
+   - Verify Python version
+   - Check startup logs
 
-2. Welcome Voice System
-   - Plays welcome sound for new members
-   - Auto-disconnects after playing
+2. Commands Don't Work
+   - Verify GUILD_ID
+   - Check role permissions
+   - Ensure command registration
 
-### Need More Help?
-- Check the full README.md for detailed setup
-- Contact support with specific error messages
-- Never share your bot token
+3. Welcome System Issues
+   - Check WELCOME_VOICE_CHANNEL_ID
+   - Verify welcome.mp3 exists
+   - Check voice permissions
+
+4. Application System Issues
+   - Verify role IDs
+   - Check channel permissions
+   - Ensure visa images exist
+
+## Support Tips
+
+1. Always check logs first
+2. Verify all IDs are correct
+3. Ensure files are in correct locations
+4. Never share your bot token
+5. Keep Python packages updated
+
+For detailed setup:
+- See full README.md
+- Check BOT_SETUP_GUIDE.md
+- Review error logs
