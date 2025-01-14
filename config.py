@@ -18,7 +18,7 @@ class Config:
     WELCOME_SOUND_PATH = os.getenv('WELCOME_SOUND_PATH', 'welcome.mp3')
     
     # Voice settings
-    FFMPEG_PATH = os.getenv('FFMPEG_PATH', '/usr/bin/ffmpeg')
+    FFMPEG_PATH = os.getenv('FFMPEG_PATH', 'C:\\ffmpeg\\bin\\ffmpeg.exe')  # Default Windows path
     
     # Logging settings
     LOG_LEVEL = os.getenv('LOG_LEVEL', 'INFO')  # Set to INFO to reduce spam, only ERROR and above go to error channel
@@ -38,6 +38,11 @@ class Config:
         if not cls.APPLICATION_ID:
             raise ValueError("Application ID not found in environment variables")
             
-        # Check welcome sound file
-        if not os.path.exists(cls.WELCOME_SOUND_PATH):
-            raise ValueError(f"Welcome sound file not found: {cls.WELCOME_SOUND_PATH}")
+        # Check welcome sound file with absolute path
+        welcome_sound_absolute = os.path.abspath(cls.WELCOME_SOUND_PATH)
+        if not os.path.exists(welcome_sound_absolute):
+            raise ValueError(f"Welcome sound file not found: {welcome_sound_absolute}")
+            
+        # Check FFMPEG installation
+        if not os.path.exists(cls.FFMPEG_PATH):
+            raise ValueError(f"FFMPEG not found at: {cls.FFMPEG_PATH}")
