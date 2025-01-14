@@ -8,6 +8,7 @@ from utils.logger import setup_logging
 # Set up intents with required privileges
 intents = discord.Intents.default()
 intents.members = True
+intents.voice_states = True  # Required for voice functionality
 
 class ArabLifeBot(commands.Bot):
     """Custom bot class for welcome voice functionality"""
@@ -22,7 +23,8 @@ class ArabLifeBot(commands.Bot):
         # List of cogs to load
         self.initial_extensions = [
             'cogs.welcome_commands',
-            'cogs.application_commands'
+            'cogs.application_commands',
+            'cogs.help_commands'
         ]
 
     async def setup_hook(self) -> None:
@@ -33,6 +35,8 @@ class ArabLifeBot(commands.Bot):
             print('Loaded welcome commands')
             await self.load_extension('cogs.application_commands')
             print('Loaded application commands')
+            await self.load_extension('cogs.help_commands')
+            print('Loaded help commands')
         except Exception as e:
             print(f'Failed to load extensions: {str(e)}')
 
@@ -40,6 +44,16 @@ class ArabLifeBot(commands.Bot):
         """Event triggered when the bot is ready"""
         print(f'Logged in as {self.user.name}')
         print(f'Bot ID: {self.user.id}')
+        
+        # Sync commands with Discord
+        try:
+            guild = discord.Object(id=Config.GUILD_ID)
+            self.tree.copy_global_to(guild=guild)
+            await self.tree.sync(guild=guild)
+            print('Successfully synced application commands')
+        except Exception as e:
+            print(f'Failed to sync commands: {str(e)}')
+            
         print('------')
         
         # Set up logging with Discord channels

@@ -32,14 +32,8 @@ class HelpCommands(Cog, LoggerMixin):
                 title="نظام المساعدة",
                 description=(
                     "اختر فئة للحصول على معلومات مفصلة عن الأوامر المتاحة:\n\n"
-                    "🎫 `/help tickets` - نظام التذاكر\n"
-                    "🛡️ `/help security` - نظام الحماية\n"
-                    "🤖 `/help automod` - نظام المراقبة الآلي\n"
                     "👋 `/help welcome` - نظام الترحيب\n"
-                    "👥 `/help roles` - إدارة الرتب\n"
-                    "🎙️ `/help voice` - إعدادات الصوت\n"
-                    "🎮 `/help status` - حالة البوت\n"
-                    "⚙️ `/help admin` - أوامر الإدارة\n\n"
+                    "📝 `/help application` - نظام التقديم\n\n"
                     "*استخدم الأمر مع اسم الفئة للحصول على تفاصيل أكثر*"
                 ),
                 color=discord.Color.blue()
@@ -62,14 +56,8 @@ class HelpCommands(Cog, LoggerMixin):
     async def show_category_help(self, interaction: discord.Interaction, category: str):
         """Show help for specific category"""
         embeds = {
-            "tickets": self.get_tickets_help(),
-            "security": self.get_security_help(),
-            "automod": self.get_automod_help(),
             "welcome": self.get_welcome_help(),
-            "roles": self.get_roles_help(),
-            "voice": self.get_voice_help(),
-            "status": self.get_status_help(),
-            "admin": self.get_admin_help()
+            "application": self.get_application_help()
         }
         
         embed = embeds.get(category.lower())
@@ -86,86 +74,6 @@ class HelpCommands(Cog, LoggerMixin):
         )
         
         await interaction.response.send_message(embed=embed, ephemeral=True)
-
-    def get_tickets_help(self) -> discord.Embed:
-        """Get help embed for ticket commands"""
-        embed = discord.Embed(
-            title="🎫 نظام التذاكر",
-            description="أوامر نظام التذاكر المتاحة:",
-            color=discord.Color.blue()
-        )
-        
-        embed.add_field(
-            name="إعداد النظام (للإدارة)",
-            value=(
-                "• `/setup-tickets` - إعداد نظام التذاكر في القناة الحالية\n"
-                "• `/ticket-stats` - عرض إحصائيات التذاكر\n"
-                "• `/ticket-search` - البحث في التذاكر"
-            ),
-            inline=False
-        )
-        
-        embed.add_field(
-            name="أزرار التذاكر",
-            value=(
-                "• `استلام` - استلام التذكرة\n"
-                "• `اغلاق` - إغلاق التذكرة\n"
-                "• `اعادة فتح` - إعادة فتح تذكرة مغلقة\n"
-                "• `حذف` - حذف التذكرة نهائياً"
-            ),
-            inline=False
-        )
-        
-        return embed
-
-    def get_security_help(self) -> discord.Embed:
-        """Get help embed for security commands"""
-        embed = discord.Embed(
-            title="🛡️ نظام الحماية",
-            description="أوامر الحماية المتاحة:",
-            color=discord.Color.blue()
-        )
-        
-        embed.add_field(
-            name="إدارة التحذيرات",
-            value=(
-                "• `/warnings [member]` - عرض تحذيرات العضو\n"
-                "• `/clearwarnings [member]` - مسح تحذيرات العضو"
-            ),
-            inline=False
-        )
-        
-        embed.add_field(
-            name="الحماية من الهجمات",
-            value=(
-                "• `/raidmode [on/off]` - تفعيل/تعطيل وضع الحماية من الهجمات\n"
-                "يتم تفعيله تلقائياً عند اكتشاف هجوم"
-            ),
-            inline=False
-        )
-        
-        return embed
-
-    def get_automod_help(self) -> discord.Embed:
-        """Get help embed for automod commands"""
-        embed = discord.Embed(
-            title="🤖 نظام المراقبة الآلي",
-            description="أوامر المراقبة الآلية المتاحة:",
-            color=discord.Color.blue()
-        )
-        
-        embed.add_field(
-            name="إعدادات الحماية",
-            value=(
-                "• `/automod spam [on/off]` - حماية من الرسائل المكررة\n"
-                "• `/automod links [on/off]` - حماية من الروابط\n"
-                "• `/automod invites [on/off]` - حماية من دعوات الديسكورد\n"
-                "• `/automod mentions [limit]` - تحديد عدد الإشارات المسموح"
-            ),
-            inline=False
-        )
-        
-        return embed
 
     def get_welcome_help(self) -> discord.Embed:
         """Get help embed for welcome commands"""
@@ -187,86 +95,20 @@ class HelpCommands(Cog, LoggerMixin):
         
         return embed
 
-    def get_roles_help(self) -> discord.Embed:
-        """Get help embed for role commands"""
+    def get_application_help(self) -> discord.Embed:
+        """Get help embed for application commands"""
         embed = discord.Embed(
-            title="👥 إدارة الرتب",
-            description="أوامر إدارة الرتب المتاحة:",
+            title="📝 نظام التقديم",
+            description="أوامر نظام التقديم المتاحة:",
             color=discord.Color.blue()
         )
         
         embed.add_field(
-            name="الأوامر الأساسية",
+            name="أوامر التقديم",
             value=(
-                "• `/مقبول [member]` - إعطاء رتبة للعضو\n"
-                "• `/مرفوض [member]` - إزالة رتبة من العضو"
-            ),
-            inline=False
-        )
-        
-        return embed
-
-    def get_voice_help(self) -> discord.Embed:
-        """Get help embed for voice commands"""
-        embed = discord.Embed(
-            title="🎙️ إعدادات الصوت",
-            description="أوامر إعدادات الصوت المتاحة:",
-            color=discord.Color.blue()
-        )
-        
-        embed.add_field(
-            name="الأوامر المتاحة",
-            value=(
-                "• `/testsound` - اختبار صوت الترحيب\n"
-                "• `/volume [0.0-1.0]` - تعديل مستوى الصوت"
-            ),
-            inline=False
-        )
-        
-        return embed
-
-    def get_status_help(self) -> discord.Embed:
-        """Get help embed for status commands"""
-        embed = discord.Embed(
-            title="🎮 حالة البوت",
-            description="أوامر تغيير حالة البوت المتاحة:",
-            color=discord.Color.blue()
-        )
-        
-        embed.add_field(
-            name="تغيير الحالة",
-            value=(
-                "• `/setstatus [type] [message]` - تغيير حالة البوت\n"
-                "الأنواع المتاحة: playing, streaming, listening, watching, competing"
-            ),
-            inline=False
-        )
-        
-        return embed
-
-    def get_admin_help(self) -> discord.Embed:
-        """Get help embed for admin commands"""
-        embed = discord.Embed(
-            title="⚙️ أوامر الإدارة",
-            description="الأوامر الإدارية المتاحة:",
-            color=discord.Color.blue()
-        )
-        
-        embed.add_field(
-            name="إعدادات عامة",
-            value=(
-                "• `/settings view` - عرض الإعدادات الحالية\n"
-                "• `/settings prefix [prefix]` - تغيير بادئة الأوامر\n"
-                "• `/settings language [lang]` - تغيير لغة البوت"
-            ),
-            inline=False
-        )
-        
-        embed.add_field(
-            name="إدارة القنوات",
-            value=(
-                "• `/setlogchannel [channel]` - تحديد قناة السجلات\n"
-                "• `/setauditchannel [channel]` - تحديد قناة المراقبة"
+                "• `/apply` - بدء عملية التقديم\n"
+                "• `/accept [member]` - قبول عضو\n"
+                "• `/reject [member]` - رفض عضو"
             ),
             inline=False
         )
