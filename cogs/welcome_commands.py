@@ -58,7 +58,7 @@ class WelcomeCommands(commands.Cog):
                     audio_source = discord.FFmpegPCMAudio(
                         self.welcome_sound_path,
                         executable=Config.FFMPEG_PATH,
-                        options='-filter:a volume=2.0'  # Increase volume (2.0 = 200% volume)
+                        options=f'-filter:a volume={Config.WELCOME_SOUND_VOLUME}'  # Use configured volume
                     )
                     self.voice_client.play(
                         audio_source,

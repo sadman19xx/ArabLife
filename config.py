@@ -16,6 +16,7 @@ class Config:
     # Welcome settings
     WELCOME_VOICE_CHANNEL_ID = int(os.getenv('WELCOME_VOICE_CHANNEL_ID', 1309595750878937240))
     WELCOME_SOUND_PATH = os.getenv('WELCOME_SOUND_PATH', 'welcome.mp3')
+    WELCOME_SOUND_VOLUME = float(os.getenv('WELCOME_SOUND_VOLUME', '0.5'))  # Default to 50% volume
     
     # Voice settings
     FFMPEG_PATH = os.getenv('FFMPEG_PATH', '/usr/bin/ffmpeg')  # Default Linux path
