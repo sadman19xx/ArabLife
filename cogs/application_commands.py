@@ -17,27 +17,27 @@ class ApplicationCommands(commands.Cog):
 
     @app_commands.command(name="accept", description="Accept a user's application")
     async def accept(self, interaction: discord.Interaction, user: discord.Member):
-        # Check if the command user has staff role
-        if not self.has_staff_role(interaction.user):
-            await interaction.response.send_message("You don't have permission to use this command.", ephemeral=True)
-            return
-
-        # Get the response channel first
-        response_channel = self.bot.get_channel(self.response_channel_id)
-        if not response_channel:
-            await interaction.response.send_message("Could not find the response channel.", ephemeral=True)
-            return
-
-        # Get the citizen role
-        citizen_role = interaction.guild.get_role(self.citizen_role_id)
-        if not citizen_role:
-            await interaction.response.send_message("Could not find the citizen role.", ephemeral=True)
-            return
-
-        # Send initial response
-        await interaction.response.send_message(f"Processing approval for {user.mention}...", ephemeral=True)
-
         try:
+            # Defer the response first to prevent timeout
+            await interaction.response.defer(ephemeral=True)
+
+            # Check if the command user has staff role
+            if not self.has_staff_role(interaction.user):
+                await interaction.followup.send("You don't have permission to use this command.", ephemeral=True)
+                return
+
+            # Get the response channel first
+            response_channel = self.bot.get_channel(self.response_channel_id)
+            if not response_channel:
+                await interaction.followup.send("Could not find the response channel.", ephemeral=True)
+                return
+
+            # Get the citizen role
+            citizen_role = interaction.guild.get_role(self.citizen_role_id)
+            if not citizen_role:
+                await interaction.followup.send("Could not find the citizen role.", ephemeral=True)
+                return
+            
             # Add the role to the user
             await user.add_roles(citizen_role)
 
@@ -54,28 +54,36 @@ class ApplicationCommands(commands.Cog):
             
             # Send the embed to the response channel
             await response_channel.send(embed=embed, file=file)
+            
+            # Send followup to original interaction
+            await interaction.followup.send(f"Successfully approved {user.mention}'s application.", ephemeral=True)
 
+        except discord.NotFound:
+            print("Interaction expired")
         except Exception as e:
-            # Log the error but don't try to send another response
             print(f"Error in accept command: {str(e)}")
+            try:
+                await interaction.followup.send("An error occurred while processing the command.", ephemeral=True)
+            except:
+                pass
 
     @app_commands.command(name="reject", description="Reject a user's application")
     async def reject(self, interaction: discord.Interaction, user: discord.Member, reason: str):
-        # Check if the command user has staff role
-        if not self.has_staff_role(interaction.user):
-            await interaction.response.send_message("You don't have permission to use this command.", ephemeral=True)
-            return
-
-        # Get the response channel first
-        response_channel = self.bot.get_channel(self.response_channel_id)
-        if not response_channel:
-            await interaction.response.send_message("Could not find the response channel.", ephemeral=True)
-            return
-
-        # Send initial response
-        await interaction.response.send_message(f"Processing rejection for {user.mention}...", ephemeral=True)
-
         try:
+            # Defer the response first to prevent timeout
+            await interaction.response.defer(ephemeral=True)
+
+            # Check if the command user has staff role
+            if not self.has_staff_role(interaction.user):
+                await interaction.followup.send("You don't have permission to use this command.", ephemeral=True)
+                return
+
+            # Get the response channel first
+            response_channel = self.bot.get_channel(self.response_channel_id)
+            if not response_channel:
+                await interaction.followup.send("Could not find the response channel.", ephemeral=True)
+                return
+
             # Create and send response message with rejected visa image
             embed = discord.Embed(
                 title="Application Response",
@@ -89,10 +97,18 @@ class ApplicationCommands(commands.Cog):
             
             # Send the embed to the response channel
             await response_channel.send(embed=embed, file=file)
+            
+            # Send followup to original interaction
+            await interaction.followup.send(f"Successfully rejected {user.mention}'s application.", ephemeral=True)
 
+        except discord.NotFound:
+            print("Interaction expired")
         except Exception as e:
-            # Log the error but don't try to send another response
             print(f"Error in reject command: {str(e)}")
+            try:
+                await interaction.followup.send("An error occurred while processing the command.", ephemeral=True)
+            except:
+                pass
 
 async def setup(bot):
     await bot.add_cog(ApplicationCommands(bot))

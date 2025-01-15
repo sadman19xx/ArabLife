@@ -23,6 +23,9 @@ class HelpCommands(Cog, LoggerMixin):
     ):
         """Shows all available commands"""
         try:
+            # Defer response to prevent timeout
+            await interaction.response.defer(ephemeral=True)
+
             if category:
                 await self.show_category_help(interaction, category)
                 return
@@ -44,36 +47,53 @@ class HelpCommands(Cog, LoggerMixin):
                 icon_url=interaction.guild.icon.url if interaction.guild.icon else None
             )
             
-            await interaction.response.send_message(embed=help_embed, ephemeral=True)
+            await interaction.followup.send(embed=help_embed, ephemeral=True)
             
+        except discord.NotFound:
+            self.log.warning("Help command interaction expired")
         except Exception as e:
             self.log.error(f"Error sending help message: {e}")
-            await interaction.response.send_message(
-                "❌ حدث خطأ أثناء إرسال قائمة الأوامر.",
-                ephemeral=True
-            )
+            try:
+                await interaction.followup.send(
+                    "❌ حدث خطأ أثناء إرسال قائمة الأوامر.",
+                    ephemeral=True
+                )
+            except:
+                pass
 
     async def show_category_help(self, interaction: discord.Interaction, category: str):
         """Show help for specific category"""
-        embeds = {
-            "welcome": self.get_welcome_help(),
-            "application": self.get_application_help()
-        }
-        
-        embed = embeds.get(category.lower())
-        if not embed:
-            await interaction.response.send_message(
-                "❌ فئة غير صالحة. استخدم `/help` لعرض الفئات المتاحة.",
-                ephemeral=True
-            )
-            return
+        try:
+            embeds = {
+                "welcome": self.get_welcome_help(),
+                "application": self.get_application_help()
+            }
             
-        embed.set_footer(
-            text=f"{interaction.guild.name}",
-            icon_url=interaction.guild.icon.url if interaction.guild.icon else None
-        )
-        
-        await interaction.response.send_message(embed=embed, ephemeral=True)
+            embed = embeds.get(category.lower())
+            if not embed:
+                await interaction.followup.send(
+                    "❌ فئة غير صالحة. استخدم `/help` لعرض الفئات المتاحة.",
+                    ephemeral=True
+                )
+                return
+                
+            embed.set_footer(
+                text=f"{interaction.guild.name}",
+                icon_url=interaction.guild.icon.url if interaction.guild.icon else None
+            )
+            
+            await interaction.followup.send(embed=embed, ephemeral=True)
+        except discord.NotFound:
+            self.log.warning("Help category interaction expired")
+        except Exception as e:
+            self.log.error(f"Error showing category help: {e}")
+            try:
+                await interaction.followup.send(
+                    "❌ حدث خطأ أثناء إرسال معلومات الفئة.",
+                    ephemeral=True
+                )
+            except:
+                pass
 
     def get_welcome_help(self) -> discord.Embed:
         """Get help embed for welcome commands"""
@@ -117,22 +137,28 @@ class HelpCommands(Cog, LoggerMixin):
 
     async def cog_app_command_error(self, interaction: discord.Interaction, error: app_commands.AppCommandError):
         """Error handler for application commands"""
-        if isinstance(error, app_commands.CommandOnCooldown):
-            await interaction.response.send_message(
-                f"*الرجاء الانتظار {error.retry_after:.1f} ثواني.*",
-                ephemeral=True
-            )
-        elif isinstance(error, app_commands.MissingPermissions):
-            await interaction.response.send_message(
-                "*لا تملك الصلاحية لأستخدام هذه الامر.*",
-                ephemeral=True
-            )
-        else:
-            self.log.error(f"Help command error: {error}")
-            await interaction.response.send_message(
-                "*حدث خطأ غير متوقع.*",
-                ephemeral=True
-            )
+        try:
+            if isinstance(error, app_commands.CommandOnCooldown):
+                await interaction.response.send_message(
+                    f"*الرجاء الانتظار {error.retry_after:.1f} ثواني.*",
+                    ephemeral=True
+                )
+            elif isinstance(error, app_commands.MissingPermissions):
+                await interaction.response.send_message(
+                    "*لا تملك الصلاحية لأستخدام هذه الامر.*",
+                    ephemeral=True
+                )
+            elif isinstance(error, discord.NotFound) and error.code == 10062:
+                self.log.warning("Help command interaction expired")
+            else:
+                self.log.error(f"Help command error: {error}")
+                if not interaction.response.is_done():
+                    await interaction.response.send_message(
+                        "*حدث خطأ غير متوقع.*",
+                        ephemeral=True
+                    )
+        except Exception as e:
+            self.log.error(f"Error in error handler: {e}")
 
 async def setup(bot):
     """Setup function for loading the cog"""
