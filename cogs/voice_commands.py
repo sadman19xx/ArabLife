@@ -22,11 +22,21 @@ class VoiceCommands(Cog):
         self.bot = bot
         # Get FFmpeg path from config or use default paths
         self.ffmpeg_path = Config.FFMPEG_PATH or self._get_ffmpeg_path()
-        self.voice_client = None
         self.reconnect_attempts = 0
         self.max_reconnect_attempts = 10  # Increased max attempts
         self.reconnect_delay = 1  # Start with 1 second delay
         self.max_reconnect_delay = 30  # Maximum delay between attempts
+        self.should_stay_connected = True
+
+    @property
+    def voice_client(self):
+        """Get the current voice client from bot's shared client"""
+        return self.bot.shared_voice_client
+
+    @voice_client.setter
+    def voice_client(self, client):
+        """Set the bot's shared voice client"""
+        self.bot.shared_voice_client = client
 
     def _get_ffmpeg_path(self):
         """Try to find FFmpeg in common locations"""
@@ -60,7 +70,11 @@ class VoiceCommands(Cog):
                     # Connect to voice channel if not already connected
                     try:
                         if not welcome_channel.guild.voice_client:
-                            self.voice_client = await welcome_channel.connect()
+                            self.voice_client = await welcome_channel.connect(self_deaf=True)
+                            # Set up initial connection
+                            if not hasattr(self.voice_client, '_event_listeners'):
+                                self.voice_client._event_listeners = {}
+                            self.voice_client.on_disconnect = self._handle_disconnect
                         else:
                             self.voice_client = welcome_channel.guild.voice_client
                             if self.voice_client.channel != welcome_channel:
@@ -68,9 +82,7 @@ class VoiceCommands(Cog):
                         
                         # Reset reconnect attempts on successful connection
                         self.reconnect_attempts = 0
-                        
-                        # Add disconnect handler
-                        self.voice_client.on_disconnect = self._handle_disconnect
+                        self.should_stay_connected = True
                     except discord.ClientException as e:
                         voice_logger.error(f"Failed to connect to voice: {str(e)}")
                         if "already connected" in str(e):
@@ -196,30 +208,33 @@ class VoiceCommands(Cog):
         """Handle voice client disconnection"""
         voice_logger.warning("Voice client disconnected")
         
+        if not self.should_stay_connected:
+            voice_logger.info("Bot was intentionally disconnected, not attempting to reconnect")
+            return
+            
         if self.voice_client and self.voice_client.channel:
             channel = self.voice_client.channel
             
-            while self.reconnect_attempts < self.max_reconnect_attempts:
+            while self.reconnect_attempts < self.max_reconnect_attempts and self.should_stay_connected:
                 self.reconnect_attempts += 1
                 voice_logger.info(f"Attempting to reconnect (attempt {self.reconnect_attempts}/{self.max_reconnect_attempts})")
                 
                 try:
-                    # Clean up old client
-                    try:
-                        if channel.guild.voice_client:
-                            await channel.guild.voice_client.disconnect()
-                    except:
-                        pass
-
                     # Wait with exponential backoff
                     delay = min(self.reconnect_delay * (2 ** (self.reconnect_attempts - 1)), self.max_reconnect_delay)
                     voice_logger.info(f"Waiting {delay} seconds before reconnecting...")
                     await asyncio.sleep(delay)
                     
+                    if not self.should_stay_connected:
+                        voice_logger.info("Reconnection cancelled - bot should not stay connected")
+                        return
+                    
                     # Reconnect
-                    self.voice_client = await channel.connect()
+                    self.voice_client = await channel.connect(self_deaf=True)
                     
                     # Set up disconnect handler
+                    if not hasattr(self.voice_client, '_event_listeners'):
+                        self.voice_client._event_listeners = {}
                     self.voice_client.on_disconnect = self._handle_disconnect
                     
                     # Set up heartbeat monitoring
@@ -235,12 +250,16 @@ class VoiceCommands(Cog):
                     
                 except Exception as e:
                     voice_logger.error(f"Failed to reconnect: {str(e)}")
+                    if not self.should_stay_connected:
+                        voice_logger.info("Stopping reconnection attempts - bot should not stay connected")
+                        return
                     # Continue to next attempt
             
             # If we get here, we've exhausted all attempts
             voice_logger.error("Max reconnection attempts reached")
             self.reconnect_attempts = 0
             self.reconnect_delay = 1
+            self.should_stay_connected = False
             try:
                 await self.voice_client.disconnect()
             except:

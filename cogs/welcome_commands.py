@@ -10,7 +10,16 @@ class WelcomeCommands(commands.Cog):
         self.bot = bot
         self.logger = logging.getLogger(__name__)
         self.welcome_sound_path = os.path.abspath('welcome.mp3')
-        self.voice_client = None
+
+    @property
+    def voice_client(self):
+        """Get the current voice client from bot's shared client"""
+        return self.bot.shared_voice_client
+
+    @voice_client.setter
+    def voice_client(self, client):
+        """Set the bot's shared voice client"""
+        self.bot.shared_voice_client = client
 
     async def play_welcome_sound(self, voice_channel: discord.VoiceChannel = None):
         """Play welcome sound in voice channel"""
@@ -39,12 +48,14 @@ class WelcomeCommands(commands.Cog):
 
             # Connect to voice channel if not already connected
             try:
-                if not self.voice_client or not self.voice_client.is_connected():
-                    self.voice_client = await voice_channel.connect(timeout=20.0)
+                if not voice_channel.guild.voice_client:
+                    self.voice_client = await voice_channel.connect(timeout=20.0, self_deaf=True)
                     self.logger.info("Successfully connected to voice channel")
-                elif self.voice_client.channel != voice_channel:
-                    await self.voice_client.move_to(voice_channel)
-                    self.logger.info("Successfully moved to new voice channel")
+                else:
+                    self.voice_client = voice_channel.guild.voice_client
+                    if self.voice_client.channel != voice_channel:
+                        await self.voice_client.move_to(voice_channel)
+                        self.logger.info("Successfully moved to new voice channel")
             except asyncio.TimeoutError:
                 self.logger.error("Timeout while connecting to voice channel")
                 return
@@ -86,14 +97,6 @@ class WelcomeCommands(commands.Cog):
             if self.voice_client and self.voice_client.is_playing():
                 self.voice_client.stop()
                 self.logger.info("Stopped audio playback")
-
-            # Attempt to clean up any broken voice clients
-            if self.voice_client and not self.voice_client.is_connected():
-                try:
-                    await self.voice_client.disconnect()
-                except:
-                    pass
-                self.voice_client = None
                 
         except Exception as e:
             self.logger.error(f"Error cleaning up voice client: {str(e)}")
@@ -154,8 +157,8 @@ class WelcomeCommands(commands.Cog):
                 return
 
             # Connect to voice channel if not already connected
-            if not self.voice_client or not self.voice_client.is_connected():
-                self.voice_client = await voice_channel.connect(timeout=20.0)
+            if not voice_channel.guild.voice_client:
+                self.voice_client = await voice_channel.connect(timeout=20.0, self_deaf=True)
                 self.logger.info("Successfully connected to voice channel on startup")
                 
         except Exception as e:

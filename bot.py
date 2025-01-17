@@ -34,13 +34,16 @@ class ArabLifeBot(commands.Bot):
         
         # List of cogs to load (security features disabled)
         self.initial_extensions = [
+            'cogs.voice_commands',  # Load voice commands first for voice client management
             'cogs.welcome_commands',
             'cogs.application_commands',
             'cogs.help_commands',
-            'cogs.voice_commands',
             'cogs.announcement_commands'
             # Security cog removed to disable auto-moderation and file deletion
         ]
+        
+        # Shared voice client for coordination between cogs
+        self.shared_voice_client = None
         
         # Don't clear existing commands
         self._clear_commands = False
@@ -117,18 +120,25 @@ class ArabLifeBot(commands.Bot):
             if before.channel != after.channel:
                 if after.channel:
                     voice_logger.info(f"Bot joined voice channel: {after.channel.name}")
+                    # Update shared voice client
+                    self.shared_voice_client = member.guild.voice_client
                 else:
                     voice_logger.info("Bot left voice channel")
+                    self.shared_voice_client = None
                     
             # Check for potential issues
             if after.channel:
                 voice_client = member.guild.voice_client
                 if voice_client:
+                    # Update shared voice client
+                    self.shared_voice_client = voice_client
+                    
                     # Verify connection is healthy
                     if not voice_client.is_connected():
                         voice_logger.warning("Voice client reports disconnected state")
                         try:
                             await voice_client.disconnect(force=True)
+                            self.shared_voice_client = None
                         except:
                             pass
                             
@@ -138,8 +148,15 @@ class ArabLifeBot(commands.Bot):
                             voice_logger.warning("Voice websocket is closed")
                             try:
                                 await voice_client.disconnect(force=True)
+                                self.shared_voice_client = None
                             except:
                                 pass
+                                
+                    # Ensure keep-alive is running
+                    if hasattr(voice_client, 'ws') and voice_client.ws and hasattr(voice_client.ws, '_keep_alive'):
+                        if not voice_client.ws._keep_alive.is_running():
+                            voice_logger.warning("Keep-alive not running, restarting...")
+                            voice_client.ws._keep_alive.start()
                                 
         except Exception as e:
             voice_logger.error(f"Error monitoring voice state: {str(e)}")
