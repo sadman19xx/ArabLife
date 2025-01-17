@@ -1,33 +1,37 @@
 import discord
 from discord.ext import commands
-from discord.commands import slash_command, Option
+from discord import app_commands
 import re
 
 class AnnouncementCommands(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
 
-    @slash_command(
+    @app_commands.command(
         name="announce",
         description="Send an announcement to a specified channel"
     )
+    @app_commands.describe(
+        message="The announcement message to send",
+        channel="The channel to send the announcement to"
+    )
     async def announce(
         self,
-        ctx,
-        message: Option(str, "The announcement message to send", required=True),
-        channel: Option(discord.TextChannel, "The channel to send the announcement to", required=True)
+        interaction: discord.Interaction,
+        message: str,
+        channel: discord.TextChannel
     ):
         # Check if bot has permission to send messages in the target channel
-        if not channel.permissions_for(ctx.guild.me).send_messages:
-            await ctx.respond(
+        if not channel.permissions_for(interaction.guild.me).send_messages:
+            await interaction.response.send_message(
                 f"Error: I don't have permission to send messages in {channel.mention}",
                 ephemeral=True
             )
             return
 
         # Check if user has administrator permission
-        if not ctx.author.guild_permissions.administrator:
-            await ctx.respond(
+        if not interaction.user.guild_permissions.administrator:
+            await interaction.response.send_message(
                 "Error: You need 'Administrator' permission to send announcements",
                 ephemeral=True
             )
@@ -38,17 +42,17 @@ class AnnouncementCommands(commands.Cog):
             await channel.send(f"@everyone {message}")
             
             # Confirm to the user
-            await ctx.respond(
+            await interaction.response.send_message(
                 f"✅ Announcement sent successfully to {channel.mention}",
                 ephemeral=True
             )
         except discord.Forbidden:
-            await ctx.respond(
+            await interaction.response.send_message(
                 f"Error: I don't have permission to mention @everyone in {channel.mention}",
                 ephemeral=True
             )
         except discord.HTTPException as e:
-            await ctx.respond(
+            await interaction.response.send_message(
                 f"Error: Failed to send announcement. {str(e)}",
                 ephemeral=True
             )
