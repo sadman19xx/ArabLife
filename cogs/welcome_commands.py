@@ -46,30 +46,47 @@ class WelcomeCommands(commands.Cog):
 
             self.logger.info(f"Attempting to join voice channel {voice_channel.name}")
 
-            # Connect to voice channel if not already connected
+            # Clean up any existing voice client first
+            if voice_channel.guild.voice_client:
+                try:
+                    await voice_channel.guild.voice_client.disconnect(force=True)
+                except:
+                    pass
+
+            # Connect to voice channel with timeout and health check
             try:
-                if not voice_channel.guild.voice_client:
-                    self.voice_client = await voice_channel.connect(timeout=20.0, self_deaf=True)
-                    self.logger.info("Successfully connected to voice channel")
-                else:
-                    self.voice_client = voice_channel.guild.voice_client
-                    if self.voice_client.channel != voice_channel:
-                        await self.voice_client.move_to(voice_channel)
-                        self.logger.info("Successfully moved to new voice channel")
+                self.voice_client = await voice_channel.connect(timeout=20.0, self_deaf=True)
+                self.logger.info("Successfully connected to voice channel")
+                
+                # Verify connection is healthy
+                if not self.voice_client.is_connected():
+                    raise discord.ClientException("Voice client reports disconnected state after connect")
+                    
+                # Set up heartbeat monitoring
+                if hasattr(self.voice_client.ws, '_keep_alive'):
+                    if not self.voice_client.ws._keep_alive.is_running():
+                        self.voice_client.ws._keep_alive.start()
+                        
             except asyncio.TimeoutError:
                 self.logger.error("Timeout while connecting to voice channel")
                 return
             except discord.ClientException as e:
                 self.logger.error(f"Failed to connect to voice channel: {str(e)}")
+                # Clean up failed connection
+                try:
+                    if voice_channel.guild.voice_client:
+                        await voice_channel.guild.voice_client.disconnect(force=True)
+                except:
+                    pass
                 return
 
-            # Play the welcome sound
+            # Play the welcome sound with improved options
             if not self.voice_client.is_playing():
                 try:
                     audio_source = discord.FFmpegPCMAudio(
                         self.welcome_sound_path,
                         executable=Config.FFMPEG_PATH,
-                        options=f'-filter:a volume={Config.WELCOME_SOUND_VOLUME}'  # Use configured volume
+                        options=f'-loglevel warning -filter:a volume={Config.WELCOME_SOUND_VOLUME}'  # Added warning level
                     )
                     self.voice_client.play(
                         audio_source,
@@ -83,33 +100,43 @@ class WelcomeCommands(commands.Cog):
 
         except Exception as e:
             self.logger.error(f"Error playing welcome sound: {str(e)}")
-            if self.voice_client and self.voice_client.is_connected():
-                await self.cleanup_voice(None)
+            # Clean up on error
+            try:
+                if voice_channel.guild.voice_client:
+                    await voice_channel.guild.voice_client.disconnect(force=True)
+            except:
+                pass
 
     async def cleanup_voice(self, error):
-        """Cleanup after playing sound but stay in channel"""
+        """Cleanup after playing sound"""
         try:
             if error:
                 self.logger.error(f"Error during playback: {str(error)}")
                 
             await asyncio.sleep(1)  # Wait a bit to ensure audio is finished
             
-            if self.voice_client and self.voice_client.is_playing():
-                self.voice_client.stop()
-                self.logger.info("Stopped audio playback")
+            if self.voice_client:
+                if self.voice_client.is_playing():
+                    self.voice_client.stop()
+                    self.logger.info("Stopped audio playback")
+                
+                # Disconnect after playing
+                try:
+                    await self.voice_client.disconnect(force=True)
+                    self.logger.info("Disconnected from voice after playback")
+                except:
+                    pass
+                self.voice_client = None
                 
         except Exception as e:
             self.logger.error(f"Error cleaning up voice client: {str(e)}")
-
-    @commands.command(name='testwelcome')
-    async def test_welcome_legacy(self, ctx):
-        """Legacy test command to play welcome sound"""
-        try:
-            await self.play_welcome_sound()  # Use default welcome channel
-            await ctx.send("Testing welcome sound in configured welcome channel...")
-        except Exception as e:
-            self.logger.error(f"Error in test welcome command: {str(e)}")
-            await ctx.send(f"Error testing welcome sound: {str(e)}")
+            # Final cleanup attempt
+            try:
+                if self.voice_client:
+                    await self.voice_client.disconnect(force=True)
+            except:
+                pass
+            self.voice_client = None
 
     @discord.app_commands.command(
         name="testwelcome",
@@ -144,7 +171,7 @@ class WelcomeCommands(commands.Cog):
 
     @commands.Cog.listener()
     async def on_ready(self):
-        """Join voice channel when bot starts"""
+        """Initialize welcome channel settings when bot starts"""
         try:
             # Get the voice channel
             voice_channel = self.bot.get_channel(Config.WELCOME_VOICE_CHANNEL_ID)
@@ -156,13 +183,10 @@ class WelcomeCommands(commands.Cog):
                 self.logger.error(f"Channel with ID {Config.WELCOME_VOICE_CHANNEL_ID} is not a voice channel")
                 return
 
-            # Connect to voice channel if not already connected
-            if not voice_channel.guild.voice_client:
-                self.voice_client = await voice_channel.connect(timeout=20.0, self_deaf=True)
-                self.logger.info("Successfully connected to voice channel on startup")
+            self.logger.info(f"Welcome channel configured: {voice_channel.name}")
                 
         except Exception as e:
-            self.logger.error(f"Error joining voice channel on startup: {str(e)}")
+            self.logger.error(f"Error initializing welcome channel: {str(e)}")
 
     @commands.Cog.listener()
     async def on_voice_state_update(self, member, before, after):

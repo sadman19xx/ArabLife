@@ -96,7 +96,6 @@ async def test_metrics_endpoint(bot: ArabLifeBot):
             assert 'latency' in data
             assert 'cpu_percent' in data
             assert 'memory' in data
-            assert 'cached_tickets' in data
             assert 'cached_prefixes' in data
             assert 'commands_used' in data
             assert 'error_count' in data
@@ -117,12 +116,6 @@ async def test_database_operations(bot: ArabLifeBot, setup_database):
         assert settings is not None
         assert settings['prefix'] == "!"
         
-        # Test ticket retrieval
-        await cursor.execute("SELECT * FROM tickets WHERE guild_id = ?", ("123456789",))
-        ticket = await cursor.fetchone()
-        assert ticket is not None
-        assert ticket['ticket_type'] == "player_report"
-        assert ticket['status'] == "open"
 
 @pytest.mark.asyncio
 async def test_bot_shutdown(bot: ArabLifeBot):

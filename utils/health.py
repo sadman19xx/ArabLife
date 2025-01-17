@@ -231,7 +231,6 @@ class HealthCheck:
                         **system_metrics,
                         
                         # Cache metrics
-                        "cached_tickets": len(cast(Any, self.bot.get_cog("TicketCommands")).active_tickets) if self.bot.get_cog("TicketCommands") else 0,
                         "cached_prefixes": len(self.bot.prefixes),
                         
                         # Command metrics

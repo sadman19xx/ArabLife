@@ -20,33 +20,32 @@ for logger_name in voice_loggers:
 intents = discord.Intents.default()
 intents.members = True  # Required for on_member_join event
 intents.voice_states = True  # Required for voice channel events and functionality
-intents.message_content = True  # Required for legacy commands like !testwelcome
 
 class ArabLifeBot(commands.Bot):
     """Custom bot class for ArabLife Discord server functionality"""
     
     def __init__(self) -> None:
         super().__init__(
-            command_prefix="!",  # Prefix for legacy commands like !testwelcome
             intents=intents,
             case_insensitive=True  # Make commands case-insensitive
         )
         
-        # List of cogs to load (security features disabled)
+        # List of cogs to load (only existing cogs)
         self.initial_extensions = [
             'cogs.voice_commands',  # Load voice commands first for voice client management
             'cogs.welcome_commands',
             'cogs.application_commands',
             'cogs.help_commands',
-            'cogs.announcement_commands'
-            # Security cog removed to disable auto-moderation and file deletion
+            'cogs.announcement_commands',
+            'cogs.role_commands',
+            'cogs.status_commands'
         ]
         
         # Shared voice client for coordination between cogs
         self.shared_voice_client = None
         
-        # Don't clear existing commands
-        self._clear_commands = False
+        # Clear existing commands to remove stale ones
+        self._clear_commands = True
 
     async def setup_hook(self) -> None:
         """Initialize bot setup"""

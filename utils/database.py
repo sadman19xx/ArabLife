@@ -53,49 +53,6 @@ class Database:
                 await self._connection.rollback()
                 raise
                 
-    def calculate_level(self, xp: int) -> int:
-        """Calculate level from XP amount"""
-        # Simple level calculation: level = xp/100
-        return xp // 100
-        
-    async def add_xp(self, guild_id: str, user_id: str, amount: int) -> Optional[int]:
-        """Add XP to user and return new level if leveled up"""
-        try:
-            async with self.transaction() as cursor:
-                # Get current XP
-                await cursor.execute("""
-                    SELECT xp, level FROM user_levels
-                    WHERE guild_id = ? AND user_id = ?
-                """, (guild_id, user_id))
-                result = await cursor.fetchone()
-                
-                if result:
-                    current_xp = result['xp']
-                    current_level = result['level']
-                else:
-                    current_xp = 0
-                    current_level = 0
-                    
-                # Add XP
-                new_xp = current_xp + amount
-                new_level = self.calculate_level(new_xp)
-                
-                # Update database
-                await cursor.execute("""
-                    INSERT OR REPLACE INTO user_levels (
-                        guild_id, user_id, xp, level, last_message_time
-                    ) VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)
-                """, (guild_id, user_id, new_xp, new_level))
-                
-                # Return new level if leveled up
-                if new_level > current_level:
-                    return new_level
-                return None
-                
-        except Exception as e:
-            logger.error(f"Failed to add XP: {e}")
-            return None
-
 # Global database instance
 db = Database()
 

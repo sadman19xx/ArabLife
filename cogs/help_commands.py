@@ -36,7 +36,8 @@ class HelpCommands(Cog, LoggerMixin):
                 description=(
                     "اختر فئة للحصول على معلومات مفصلة عن الأوامر المتاحة:\n\n"
                     "👋 `/help welcome` - نظام الترحيب\n"
-                    "📝 `/help application` - نظام التقديم\n\n"
+                    "📝 `/help application` - نظام التقديم\n"
+                    "📢 `/help announcement` - نظام الإعلانات\n\n"
                     "*استخدم الأمر مع اسم الفئة للحصول على تفاصيل أكثر*"
                 ),
                 color=discord.Color.blue()
@@ -66,7 +67,8 @@ class HelpCommands(Cog, LoggerMixin):
         try:
             embeds = {
                 "welcome": self.get_welcome_help(),
-                "application": self.get_application_help()
+                "application": self.get_application_help(),
+                "announcement": self.get_announcement_help()
             }
             
             embed = embeds.get(category.lower())
@@ -129,6 +131,25 @@ class HelpCommands(Cog, LoggerMixin):
                 "• `/apply` - بدء عملية التقديم\n"
                 "• `/accept [member]` - قبول عضو\n"
                 "• `/reject [member]` - رفض عضو"
+            ),
+            inline=False
+        )
+        
+        return embed
+
+    def get_announcement_help(self) -> discord.Embed:
+        """Get help embed for announcement commands"""
+        embed = discord.Embed(
+            title="📢 نظام الإعلانات",
+            description="أوامر نظام الإعلانات المتاحة:",
+            color=discord.Color.blue()
+        )
+        
+        embed.add_field(
+            name="أوامر الإعلانات",
+            value=(
+                "• `/announce [message] [channel]` - إرسال إعلان إلى قناة محددة\n"
+                "  *يتطلب صلاحية الإدارة*"
             ),
             inline=False
         )

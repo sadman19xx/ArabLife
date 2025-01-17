@@ -40,19 +40,27 @@ class VoiceCommands(Cog):
 
     def _get_ffmpeg_path(self):
         """Try to find FFmpeg in common locations"""
+        # First check if ffmpeg is in PATH
+        import shutil
+        ffmpeg_in_path = shutil.which('ffmpeg')
+        if ffmpeg_in_path:
+            return ffmpeg_in_path
+
         common_paths = [
+            r"C:\ffmpeg\bin\ffmpeg.exe",  # Windows custom install
+            r"C:\Program Files\ffmpeg\bin\ffmpeg.exe",  # Windows program files
+            r"C:\Program Files (x86)\ffmpeg\bin\ffmpeg.exe",  # Windows program files x86
             "/usr/bin/ffmpeg",  # Linux default
             "/usr/local/bin/ffmpeg",  # Linux alternative
             "/opt/homebrew/bin/ffmpeg",  # macOS Homebrew
-            r"C:\ffmpeg\bin\ffmpeg.exe",  # Windows custom install
-            "ffmpeg"  # System PATH
         ]
         
         for path in common_paths:
             if os.path.isfile(path):
                 return path
         
-        return "/usr/bin/ffmpeg"  # Default to Linux standard location
+        # Default to just 'ffmpeg' and let the system resolve it
+        return "ffmpeg"
 
     @Cog.listener()
     async def on_voice_state_update(self, member, before, after):
@@ -67,22 +75,28 @@ class VoiceCommands(Cog):
             try:
                 # Play welcome sound
                 if os.path.exists('welcome.mp3'):
-                    # Connect to voice channel if not already connected
+                    # Clean up any existing voice client first
+                    if welcome_channel.guild.voice_client:
+                        try:
+                            await welcome_channel.guild.voice_client.disconnect(force=True)
+                        except:
+                            pass
+
+                    # Connect to voice channel
                     try:
-                        if not welcome_channel.guild.voice_client:
-                            self.voice_client = await welcome_channel.connect(self_deaf=True)
-                            # Set up initial connection
-                            if not hasattr(self.voice_client, '_event_listeners'):
-                                self.voice_client._event_listeners = {}
-                            self.voice_client.on_disconnect = self._handle_disconnect
-                        else:
-                            self.voice_client = welcome_channel.guild.voice_client
-                            if self.voice_client.channel != welcome_channel:
-                                await self.voice_client.move_to(welcome_channel)
+                        self.voice_client = await welcome_channel.connect(self_deaf=True, timeout=20.0)
+                        # Set up initial connection
+                        if not hasattr(self.voice_client, '_event_listeners'):
+                            self.voice_client._event_listeners = {}
+                        self.voice_client.on_disconnect = self._handle_disconnect
                         
                         # Reset reconnect attempts on successful connection
                         self.reconnect_attempts = 0
                         self.should_stay_connected = True
+                        
+                        # Verify connection is healthy
+                        if not self.voice_client.is_connected():
+                            raise discord.ClientException("Voice client reports disconnected state after connect")
                     except discord.ClientException as e:
                         voice_logger.error(f"Failed to connect to voice: {str(e)}")
                         if "already connected" in str(e):
@@ -94,10 +108,11 @@ class VoiceCommands(Cog):
                             # Try connecting again
                             self.voice_client = await welcome_channel.connect()
 
-                    # Play the welcome sound
+                    # Play the welcome sound with options for better stability
                     audio_source = discord.FFmpegPCMAudio(
                         'welcome.mp3',
-                        executable=self.ffmpeg_path
+                        executable=self.ffmpeg_path,
+                        options='-loglevel warning'
                     )
                     transformed_source = discord.PCMVolumeTransformer(audio_source, volume=Config.DEFAULT_VOLUME)
                     
@@ -214,6 +229,14 @@ class VoiceCommands(Cog):
             
         if self.voice_client and self.voice_client.channel:
             channel = self.voice_client.channel
+            guild = channel.guild
+            
+            # Clean up existing voice client
+            try:
+                if guild.voice_client:
+                    await guild.voice_client.disconnect(force=True)
+            except:
+                pass
             
             while self.reconnect_attempts < self.max_reconnect_attempts and self.should_stay_connected:
                 self.reconnect_attempts += 1
@@ -229,8 +252,15 @@ class VoiceCommands(Cog):
                         voice_logger.info("Reconnection cancelled - bot should not stay connected")
                         return
                     
-                    # Reconnect
-                    self.voice_client = await channel.connect(self_deaf=True)
+                    # Ensure no existing connection
+                    if guild.voice_client:
+                        try:
+                            await guild.voice_client.disconnect(force=True)
+                        except:
+                            pass
+                    
+                    # Reconnect with timeout
+                    self.voice_client = await channel.connect(self_deaf=True, timeout=20.0)
                     
                     # Set up disconnect handler
                     if not hasattr(self.voice_client, '_event_listeners'):
@@ -239,7 +269,12 @@ class VoiceCommands(Cog):
                     
                     # Set up heartbeat monitoring
                     if hasattr(self.voice_client.ws, '_keep_alive'):
-                        self.voice_client.ws._keep_alive.start()
+                        if not self.voice_client.ws._keep_alive.is_running():
+                            self.voice_client.ws._keep_alive.start()
+                    
+                    # Verify connection is healthy
+                    if not self.voice_client.is_connected():
+                        raise discord.ClientException("Voice client reports disconnected state after reconnect")
                     
                     voice_logger.info("Successfully reconnected to voice")
                     
@@ -253,6 +288,14 @@ class VoiceCommands(Cog):
                     if not self.should_stay_connected:
                         voice_logger.info("Stopping reconnection attempts - bot should not stay connected")
                         return
+                        
+                    # Clean up failed connection
+                    try:
+                        if guild.voice_client:
+                            await guild.voice_client.disconnect(force=True)
+                    except:
+                        pass
+                    
                     # Continue to next attempt
             
             # If we get here, we've exhausted all attempts
@@ -260,8 +303,11 @@ class VoiceCommands(Cog):
             self.reconnect_attempts = 0
             self.reconnect_delay = 1
             self.should_stay_connected = False
+            
+            # Final cleanup
             try:
-                await self.voice_client.disconnect()
+                if guild.voice_client:
+                    await guild.voice_client.disconnect(force=True)
             except:
                 pass
             self.voice_client = None

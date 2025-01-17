@@ -89,14 +89,7 @@ def mock_config(monkeypatch):
         "ROLE_ID_REMOVE_ALLOWED": 101,
         "ROLE_ACTIVITY_LOG_CHANNEL_ID": 102,
         "AUDIT_LOG_CHANNEL_ID": 103,
-        "ERROR_LOG_CHANNEL_ID": 104,
-        "TICKET_STAFF_ROLE_ID": 105,
-        "TICKET_CATEGORY_ID": 106,
-        "TICKET_LOG_CHANNEL_ID": 107,
-        "PLAYER_REPORT_ROLE_ID": 108,
-        "HEALTH_DEPT_ROLE_ID": 109,
-        "INTERIOR_DEPT_ROLE_ID": 110,
-        "FEEDBACK_ROLE_ID": 111
+        "ERROR_LOG_CHANNEL_ID": 104
     }
     
     for key, value in test_config.items():
@@ -119,12 +112,5 @@ async def setup_database():
             INSERT INTO bot_settings (guild_id, prefix)
             VALUES (?, ?)
         """, ("123456789", "!"))
-        
-        # Create test tickets
-        await db.execute("""
-            INSERT INTO tickets (
-                channel_id, guild_id, user_id, ticket_type, status, created_at
-            ) VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
-        """, ("111111111", "123456789", "987654321", "player_report", "open"))
         
         await db.commit()
