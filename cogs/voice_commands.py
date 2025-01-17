@@ -16,43 +16,84 @@ class VoiceCommands(Cog):
     def __init__(self, bot):
         self.bot = bot
         self.welcome_channel_id = 1309595750878937240
+        self.log_channel_id = 1327648816874262549  # Dedicated logs channel
         self.voice_client = None
         self.audio_queue = deque()  # Queue for handling multiple join events
         self.is_playing = False
         self.reconnect_lock = asyncio.Lock()
         self.heartbeat_task = None
+        self.last_heartbeat = None
+        self.connection_retries = 0
         # Connect to welcome channel on startup
         bot.loop.create_task(self._initial_connect())
         # Start connection heartbeat
         bot.loop.create_task(self._connection_heartbeat())
+
+    async def _log_to_channel(self, message):
+        """Send log message to Discord channel"""
+        try:
+            channel = self.bot.get_channel(self.log_channel_id)
+            if channel:
+                await channel.send(f"```\n{message}\n```")
+        except Exception as e:
+            logger.error(f"Failed to send log to channel: {str(e)}")
 
     async def _connection_heartbeat(self):
         """Monitor and maintain voice connection"""
         await self.bot.wait_until_ready()
         while not self.bot.is_closed():
             try:
+                current_time = asyncio.get_event_loop().time()
+                
+                # Check if we need to force reconnection due to stale connection
+                if self.last_heartbeat and current_time - self.last_heartbeat > 60:
+                    await self._log_to_channel("⚠️ Connection appears stale, forcing reconnection...")
+                    if self.voice_client:
+                        await self.voice_client.disconnect(force=True)
+                    self.voice_client = None
+                
                 # Check connection status
                 if not self.voice_client or not self.voice_client.is_connected():
-                    logger.warning("Voice connection lost, attempting to reconnect...")
+                    await self._log_to_channel("🔄 Voice connection lost, attempting to reconnect...")
                     async with self.reconnect_lock:
                         await self._connect()
+                        if self.voice_client and self.voice_client.is_connected():
+                            self.connection_retries = 0
+                            await self._log_to_channel("✅ Successfully reconnected to voice channel")
+                        else:
+                            self.connection_retries += 1
+                            await self._log_to_channel(f"❌ Reconnection attempt failed (attempt {self.connection_retries})")
                 else:
                     # Ensure we're in the correct channel and not deafened
                     channel = self.bot.get_channel(self.welcome_channel_id)
-                    if channel and self.voice_client.channel != channel:
-                        logger.warning("Bot in wrong channel, moving to correct channel...")
-                        await self._connect()
-                    elif self.voice_client.guild.me.voice.deaf:
-                        logger.warning("Bot is deafened, undeafening...")
-                        await self.voice_client.guild.change_voice_state(
-                            channel=self.voice_client.channel,
-                            self_deaf=False,
-                            self_mute=False
-                        )
+                    if channel:
+                        if self.voice_client.channel != channel:
+                            await self._log_to_channel("🔄 Bot in wrong channel, moving to correct channel...")
+                            await self._connect()
+                        
+                        # Check and fix deafened state
+                        voice_state = self.voice_client.guild.me.voice
+                        if voice_state and (voice_state.deaf or voice_state.self_deaf):
+                            await self._log_to_channel("🔊 Bot is deafened, undeafening...")
+                            await self.voice_client.guild.change_voice_state(
+                                channel=channel,
+                                self_deaf=False,
+                                self_mute=False
+                            )
+                            # Double-check the change was applied
+                            await asyncio.sleep(1)
+                            if self.voice_client.guild.me.voice.deaf:
+                                await self._log_to_channel("⚠️ Failed to undeafen, forcing reconnection...")
+                                await self._connect()
+                
+                self.last_heartbeat = current_time
+                
             except Exception as e:
-                logger.error(f"Heartbeat error: {str(e)}")
+                error_msg = f"❌ Heartbeat error: {str(e)}"
+                logger.error(error_msg)
+                await self._log_to_channel(error_msg)
             
-            await asyncio.sleep(30)  # Check every 30 seconds
+            await asyncio.sleep(5)  # Check more frequently
 
     async def _initial_connect(self):
         """Initial connection attempt"""
@@ -175,59 +216,72 @@ class VoiceCommands(Cog):
     @Cog.listener()
     async def on_voice_state_update(self, member, before, after):
         """Handle voice state updates"""
-        # If this is our bot and it was deafened, undeafen it
-        if member.id == self.bot.user.id and after.deaf:
-            try:
-                await member.guild.change_voice_state(
-                    channel=after.channel,
-                    self_deaf=False,
-                    self_mute=False
-                )
-                logger.info("Undeafened bot after voice state change")
+        # Handle bot's voice state changes
+        if member.id == self.bot.user.id:
+            # If bot was moved to a different channel, move back
+            if after.channel and after.channel.id != self.welcome_channel_id:
+                try:
+                    channel = self.bot.get_channel(self.welcome_channel_id)
+                    await member.move_to(channel)
+                    await self._log_to_channel("🔄 Bot was moved, returning to welcome channel")
+                except Exception as e:
+                    await self._log_to_channel(f"❌ Failed to return to welcome channel: {str(e)}")
                 return
-            except Exception as e:
-                logger.error(f"Error undeafening bot: {str(e)}")
+                
+            # If bot was deafened, undeafen it
+            if after.deaf or after.self_deaf:
+                try:
+                    await member.guild.change_voice_state(
+                        channel=after.channel,
+                        self_deaf=False,
+                        self_mute=False
+                    )
+                    await self._log_to_channel("🔊 Undeafened bot")
+                except Exception as e:
+                    await self._log_to_channel(f"❌ Failed to undeafen: {str(e)}")
                 return
-
-        # Ignore other bot events
-        if member.bot:
-            return
-
-        if after.channel and after.channel.id == self.welcome_channel_id and before.channel != after.channel:
-            # Ensure we're connected
-            if not self.voice_client or not self.voice_client.is_connected():
+                
+            # If bot was disconnected, reconnect immediately
+            if before.channel and not after.channel:
+                await self._log_to_channel("⚠️ Bot was disconnected, reconnecting...")
                 await self._connect()
-                await asyncio.sleep(1)  # Wait for connection to stabilize
+                return
 
-            # Play welcome sound
-            await self._play_welcome(member.name)
+        # Handle other users
+        if not member.bot and after.channel and after.channel.id == self.welcome_channel_id:
+            # Only trigger for users joining (not leaving or moving within the channel)
+            if before.channel != after.channel:
+                await self._log_to_channel(f"👋 User {member.name} joined, playing welcome sound")
+                # Ensure we're connected
+                if not self.voice_client or not self.voice_client.is_connected():
+                    await self._connect()
+                    await asyncio.sleep(1)
+
+                # Play welcome sound
+                await self._play_welcome(member.name)
 
     @Cog.listener()
     async def on_voice_client_disconnect(self):
         """Handle disconnection"""
-        logger.info("Voice client disconnected")
+        await self._log_to_channel("⚠️ Voice client disconnected, initiating recovery...")
         
-        # Clear the current voice client
-        if self.voice_client:
-            try:
-                await self.voice_client.disconnect(force=True)
-            except:
-                pass
+        # Don't force disconnect, just clear our reference
         self.voice_client = None
         
         # Get channel and check if we can reconnect
         channel = self.bot.get_channel(self.welcome_channel_id)
         if not channel:
-            logger.error("Could not find welcome channel for reconnection")
+            await self._log_to_channel("❌ Could not find welcome channel for reconnection")
             return
             
         # Wait before attempting reconnection
-        await asyncio.sleep(5)
+        await asyncio.sleep(2)
         
         try:
-            # Clean up any existing voice clients for this guild
-            if channel.guild.voice_client:
+            # Only clean up if we're in a different channel
+            if channel.guild.voice_client and channel.guild.voice_client.channel != channel:
                 await channel.guild.voice_client.disconnect(force=True)
+                await asyncio.sleep(1)
                 
             # Attempt to reconnect
             self.voice_client = await channel.connect(
@@ -237,7 +291,7 @@ class VoiceCommands(Cog):
             )
             
             # Wait for connection to stabilize
-            await asyncio.sleep(2)
+            await asyncio.sleep(1)
             
             # Ensure we're not deafened
             await channel.guild.change_voice_state(
@@ -246,10 +300,12 @@ class VoiceCommands(Cog):
                 self_mute=False
             )
             
-            logger.info("Successfully reconnected to voice channel")
+            await self._log_to_channel("✅ Successfully recovered voice connection")
             
         except Exception as e:
-            logger.error(f"Failed to reconnect: {str(e)}")
+            error_msg = f"❌ Failed to recover connection: {str(e)}"
+            logger.error(error_msg)
+            await self._log_to_channel(error_msg)
             self.voice_client = None
 
 async def setup(bot):
