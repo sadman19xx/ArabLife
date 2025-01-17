@@ -28,6 +28,86 @@ class VoiceCommands(Cog):
         self.reconnect_delay = 1  # Start with 1 second delay
         self.max_reconnect_delay = 30  # Maximum delay between attempts
         self.should_stay_connected = True
+        self.welcome_channel_id = 1309595750878937240
+        # Connect to welcome channel on startup and start connection check
+        bot.loop.create_task(self._ensure_voice_connected())
+        bot.loop.create_task(self._connection_check())
+
+    async def _connection_check(self):
+        """Periodically check and ensure voice connection"""
+        await self.bot.wait_until_ready()
+        while not self.bot.is_closed():
+            try:
+                welcome_channel = self.bot.get_channel(self.welcome_channel_id)
+                if welcome_channel:
+                    if not self.voice_client or not self.voice_client.is_connected() or self.voice_client.channel != welcome_channel:
+                        voice_logger.info("Connection check: Reconnecting to voice channel")
+                        await self._ensure_voice_connected()
+                await asyncio.sleep(30)  # Check every 30 seconds
+            except Exception as e:
+                voice_logger.error(f"Error in connection check: {str(e)}")
+                await asyncio.sleep(5)  # Short delay on error before next check
+
+    async def _ensure_voice_connected(self):
+        """Ensure bot is connected to welcome channel"""
+        await self.bot.wait_until_ready()  # Wait for bot to be ready
+        
+        welcome_channel = self.bot.get_channel(self.welcome_channel_id)
+        if not welcome_channel:
+            voice_logger.error("Could not find welcome channel")
+            return
+            
+        try:
+            # Check if we need to connect
+            if not welcome_channel.guild.voice_client or welcome_channel.guild.voice_client.channel != welcome_channel:
+                # Clean up any existing connection
+                if welcome_channel.guild.voice_client:
+                    try:
+                        await welcome_channel.guild.voice_client.disconnect(force=True)
+                        await asyncio.sleep(0.5)  # Add delay after disconnect
+                    except Exception as e:
+                        voice_logger.error(f"Error cleaning up existing connection: {str(e)}")
+                
+                # Connect to the channel
+                self.voice_client = await welcome_channel.connect(self_deaf=True, timeout=float(Config.VOICE_TIMEOUT))
+                
+                # Set up connection
+                if not hasattr(self.voice_client, '_event_listeners'):
+                    self.voice_client._event_listeners = {}
+                self.voice_client.on_disconnect = self._handle_disconnect
+                
+                # Reset reconnect attempts
+                self.reconnect_attempts = 0
+                self.should_stay_connected = True
+                
+                # Set up heartbeat monitoring
+                if hasattr(self.voice_client.ws, '_keep_alive'):
+                    if not self.voice_client.ws._keep_alive.is_running():
+                        self.voice_client.ws._keep_alive.start()
+                
+                voice_logger.info(f"Connected to welcome channel {welcome_channel.name}")
+                
+                # Add small delay to ensure connection is stable
+                await asyncio.sleep(0.5)
+                
+                # Verify connection is healthy
+                if not self.voice_client.is_connected():
+                    raise discord.ClientException("Voice client reports disconnected state after connect")
+            else:
+                # Already connected to correct channel
+                self.voice_client = welcome_channel.guild.voice_client
+                self.should_stay_connected = True
+                voice_logger.info("Already connected to welcome channel")
+                
+        except Exception as e:
+            voice_logger.error(f"Error ensuring voice connection: {str(e)}")
+            # Try to clean up on error
+            try:
+                if welcome_channel.guild.voice_client:
+                    await welcome_channel.guild.voice_client.disconnect(force=True)
+            except:
+                pass
+            raise
 
     @property
     def voice_client(self):
@@ -71,43 +151,15 @@ class VoiceCommands(Cog):
             return
 
         # Check if member joined the specific channel
-        if after.channel and after.channel.id == 1309595750878937240 and before.channel != after.channel:
+        if after.channel and after.channel.id == self.welcome_channel_id and before.channel != after.channel:
             welcome_channel = after.channel
             try:
-                # Play welcome sound
-                if os.path.exists('welcome.mp3'):
-                    # Only connect if not already in the correct channel
-                    if not welcome_channel.guild.voice_client or welcome_channel.guild.voice_client.channel != welcome_channel:
-                        try:
-                            # Connect to voice channel with shorter timeout
-                            self.voice_client = await welcome_channel.connect(self_deaf=True, timeout=float(Config.VOICE_TIMEOUT))
-                            
-                            # Set up initial connection
-                            if not hasattr(self.voice_client, '_event_listeners'):
-                                self.voice_client._event_listeners = {}
-                            self.voice_client.on_disconnect = self._handle_disconnect
-                            
-                            # Reset reconnect attempts on successful connection
-                            self.reconnect_attempts = 0
-                            self.should_stay_connected = True
-                            
-                            # Add small delay to ensure connection is stable
-                            await asyncio.sleep(0.5)
-                            
-                            # Verify connection is healthy
-                            if not self.voice_client.is_connected():
-                                raise discord.ClientException("Voice client reports disconnected state after connect")
-                        except discord.ClientException as e:
-                            voice_logger.error(f"Failed to connect to voice: {str(e)}")
-                            if "already connected" in str(e):
-                                # Clean up existing connection
-                                try:
-                                    await welcome_channel.guild.voice_client.disconnect()
-                                except:
-                                    pass
-                                # Try connecting again
-                                self.voice_client = await welcome_channel.connect()
-
+                # Ensure we're connected to the voice channel
+                if not welcome_channel.guild.voice_client or welcome_channel.guild.voice_client.channel != welcome_channel:
+                    await self._ensure_voice_connected()
+                
+                # Play welcome sound if we have a voice client
+                if self.voice_client and os.path.exists('welcome.mp3'):
                     try:
                         # Play the welcome sound with options for better stability
                         audio_source = discord.FFmpegPCMAudio(
@@ -122,13 +174,10 @@ class VoiceCommands(Cog):
                             voice_logger.info(f"Playing welcome sound for {member.name}#{member.discriminator} in {welcome_channel.name}")
                     except Exception as audio_error:
                         voice_logger.error(f"Error playing audio: {str(audio_error)}")
-                        # Clean up on audio error
-                        if self.voice_client:
-                            await self.voice_client.disconnect(force=True)
                 else:
-                    voice_logger.warning(f"Welcome sound file not found at {Config.WELCOME_SOUND_PATH}")
+                    voice_logger.warning("Welcome sound file not found or voice client not available")
             except Exception as e:
-                voice_logger.error(f"Error playing welcome sound: {str(e)}")
+                voice_logger.error(f"Error in voice state update: {str(e)}")
 
     @app_commands.command(
         name="testsound",
@@ -163,48 +212,27 @@ class VoiceCommands(Cog):
 
             # Play welcome sound if it exists
             if os.path.exists('welcome.mp3'):
-                # Only connect if not already in the correct channel
+                # Ensure we're connected to the voice channel
                 if not welcome_channel.guild.voice_client or welcome_channel.guild.voice_client.channel != welcome_channel:
+                    await self._ensure_voice_connected()
+                
+                # Play welcome sound if we have a voice client
+                if self.voice_client:
                     try:
-                        # Connect to voice channel with timeout
-                        self.voice_client = await welcome_channel.connect(self_deaf=True, timeout=float(Config.VOICE_TIMEOUT))
+                        # Play the welcome sound with better stability options
+                        audio_source = discord.FFmpegPCMAudio(
+                            'welcome.mp3',
+                            executable=self.ffmpeg_path,
+                            options='-loglevel warning'
+                        )
+                        transformed_source = discord.PCMVolumeTransformer(audio_source, volume=Config.DEFAULT_VOLUME)
                         
-                        # Set up initial connection
-                        if not hasattr(self.voice_client, '_event_listeners'):
-                            self.voice_client._event_listeners = {}
-                        self.voice_client.on_disconnect = self._handle_disconnect
-                        
-                        # Reset reconnect attempts on successful connection
-                        self.reconnect_attempts = 0
-                        self.should_stay_connected = True
-                        
-                        # Add small delay to ensure connection is stable
-                        await asyncio.sleep(0.5)
-                        
-                        # Verify connection is healthy
-                        if not self.voice_client.is_connected():
-                            raise discord.ClientException("Voice client reports disconnected state after connect")
+                        if not self.voice_client.is_playing():
+                            self.voice_client.play(transformed_source, after=lambda e: asyncio.create_task(self._after_play(e)))
+                            voice_logger.info(f"Testing welcome sound in {welcome_channel.name}")
                     except Exception as e:
-                        voice_logger.error(f"Error in test sound: {str(e)}")
-                        if self.voice_client:
-                            await self.voice_client.disconnect(force=True)
+                        voice_logger.error(f"Error playing audio: {str(e)}")
                         raise
-
-                try:
-                    # Play the welcome sound with better stability options
-                    audio_source = discord.FFmpegPCMAudio(
-                        'welcome.mp3',
-                        executable=self.ffmpeg_path,
-                        options='-loglevel warning'
-                    )
-                    transformed_source = discord.PCMVolumeTransformer(audio_source, volume=Config.DEFAULT_VOLUME)
-                    
-                    if not self.voice_client.is_playing():
-                        self.voice_client.play(transformed_source, after=lambda e: asyncio.create_task(self._after_play(e)))
-                        voice_logger.info(f"Testing welcome sound in {welcome_channel.name}")
-                except Exception as e:
-                    voice_logger.error(f"Error playing audio: {str(e)}")
-                    raise
             else:
                 await interaction.followup.send("*لم يتم تكوين ملف الصوت.*")
 
