@@ -265,7 +265,17 @@ class VoiceCommands(Cog):
                 
                 # Find welcome.mp3 file
                 welcome_file = self._find_welcome_sound()
-                if self.voice_client and welcome_file:
+                if not welcome_file:
+                    voice_logger.error("Welcome sound file not found")
+                    return
+                
+                # Ensure voice client is ready
+                if not self.voice_client or not self.voice_client.is_connected():
+                    voice_logger.info("Voice client not ready, attempting to reconnect")
+                    await self._ensure_voice_connected()
+                    await asyncio.sleep(1)  # Wait for connection to stabilize
+                
+                if self.voice_client and self.voice_client.is_connected():
                     try:
                         # Play the welcome sound with options for better stability
                         audio_source = discord.FFmpegPCMAudio(
@@ -321,7 +331,18 @@ class VoiceCommands(Cog):
 
             # Find welcome.mp3 file
             welcome_file = self._find_welcome_sound()
-            if welcome_file:
+            if not welcome_file:
+                voice_logger.error("Welcome sound file not found")
+                await interaction.followup.send("*لم يتم تكوين ملف الصوت.*")
+                return
+            
+            # Ensure voice client is ready
+            if not self.voice_client or not self.voice_client.is_connected():
+                voice_logger.info("Voice client not ready, attempting to reconnect")
+                await self._ensure_voice_connected()
+                await asyncio.sleep(1)  # Wait for connection to stabilize
+            
+            if self.voice_client and self.voice_client.is_connected():
                 # Ensure we're connected to the voice channel
                 if not welcome_channel.guild.voice_client or welcome_channel.guild.voice_client.channel != welcome_channel:
                     await self._ensure_voice_connected()
