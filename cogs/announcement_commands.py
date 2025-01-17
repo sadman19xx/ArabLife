@@ -57,5 +57,5 @@ class AnnouncementCommands(commands.Cog):
                 ephemeral=True
             )
 
-def setup(bot):
-    bot.add_cog(AnnouncementCommands(bot))
+async def setup(bot):
+    await bot.add_cog(AnnouncementCommands(bot))
