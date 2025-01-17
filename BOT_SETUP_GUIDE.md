@@ -28,16 +28,14 @@ This guide provides comprehensive instructions for setting up the ArabLife Disco
    - Save the token (you'll need this later)
 
 3. Enable Required Intents
-   - Presence Intent
-   - Server Members Intent
-   - Message Content Intent
+   - Server Members Intent (for welcome system)
+   - Voice State Intent (for voice features)
 
 4. Invite Bot to Server
    - Go to OAuth2 > URL Generator
    - Select scopes: `bot`, `applications.commands`
    - Select required permissions:
      - Manage Roles
-     - Manage Channels
      - Send Messages
      - Connect
      - Speak
@@ -79,19 +77,27 @@ APPLICATION_ID=your_bot_application_id
 
 # Channel IDs
 WELCOME_VOICE_CHANNEL_ID=voice_channel_id
-RESPONSE_CHANNEL_ID=response_channel_id
 AUDIT_LOG_CHANNEL_ID=audit_log_id
 ROLE_ACTIVITY_LOG_CHANNEL_ID=role_log_id
 
 # Role IDs
-STAFF_ROLE_ID=staff_role_id
-CITIZEN_ROLE_ID=citizen_role_id
 ROLE_ID_TO_GIVE=default_role_id
 ROLE_IDS_ALLOWED=mod_role_ids
 
-# FiveM Settings (if using FiveM integration)
-FIVEM_SERVER_IP=your_server_ip
-FIVEM_SERVER_PORT=your_server_port
+# Voice Settings
+WELCOME_SOUND_PATH=welcome.mp3
+WELCOME_SOUND_VOLUME=0.5
+FFMPEG_PATH=/usr/bin/ffmpeg
+DEFAULT_VOLUME=0.5
+VOICE_TIMEOUT=20
+MAX_RECONNECT_ATTEMPTS=10
+RECONNECT_DELAY=1
+MAX_RECONNECT_DELAY=30
+
+# Logging Settings
+LOG_LEVEL=INFO
+LOG_TO_FILE=false
+LOG_DIR=logs
 ```
 
 2. Required Files
@@ -115,7 +121,7 @@ python3 validate_env.py
 
 2. Verify Operation
    - Check bot comes online in Discord
-   - Test basic commands
+   - Test slash commands
    - Verify welcome system
    - Check role assignments
 
@@ -148,32 +154,32 @@ sudo systemctl status arablife-bot
 ### 1. Application System
 - Set up application channels
 - Configure role permissions
-- Test approval/denial process
+- Test `/accept` and `/reject` commands
 
 ### 2. Welcome System
 - Configure welcome channel
-- Test welcome sound
-- Verify image generation
+- Test `/testwelcome` command
+- Verify welcome sound plays
 
 ### 3. Role Management
 - Set up role hierarchy
-- Configure auto-roles
+- Configure role permissions
 - Test role commands
 
-### 4. Security Features
-- Configure audit logging
-- Set up anti-spam
-- Test verification system
-
-### 5. Voice System
+### 4. Voice System
 - Set up voice channels
 - Configure permissions
-- Test dynamic creation
+- Test voice connection handling
 
-### 6. FiveM Integration
-- Configure server connection
-- Test status commands
-- Verify player tracking
+### 5. Status Commands
+- Test bot health checks
+- Monitor system metrics
+- Verify status reporting
+
+### 6. Announcement System
+- Configure announcement channels
+- Test announcement commands
+- Verify message management
 
 ## Troubleshooting
 
@@ -190,10 +196,10 @@ sudo systemctl status arablife-bot
    - Check channel permissions
    - Verify role hierarchy
 
-3. Feature Issues
-   - Check specific feature logs
-   - Verify required channels exist
-   - Test with admin permissions
+3. Voice Issues
+   - Check FFmpeg installation
+   - Verify welcome.mp3 exists
+   - Test voice permissions
 
 ### Maintenance
 
@@ -231,5 +237,4 @@ sudo systemctl status arablife-bot
 
 - Check README.md for overview
 - Review logs for errors
-- Join support server
 - Check GitHub issues

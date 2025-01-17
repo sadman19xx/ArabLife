@@ -10,27 +10,27 @@
 2. Welcome System
    - Custom welcome sounds
    - Welcome messages
-   - Custom welcome images
+   - `/testwelcome` command
 
-3. Role & Security
-   - Role management
-   - Anti-spam protection
-   - Audit logging
+3. Role Management
+   - Role assignment commands
+   - Role hierarchy management
+   - Role-based permissions
 
-4. Voice & Leveling
+4. Voice System
    - Voice channel management
-   - Experience tracking
-   - Level-based roles
+   - Voice activity tracking
+   - Robust connection handling
 
-5. FiveM Integration
-   - Server status
-   - Player management
-   - Server info display
+5. Status Commands
+   - Server status monitoring
+   - Bot health checks
+   - System metrics
 
-6. Support Features
-   - Ticket system
-   - Custom commands
-   - AutoMod protection
+6. Announcement System
+   - Server announcements
+   - Automated notifications
+   - Message management
 
 ## Quick Installation
 
@@ -59,32 +59,35 @@ APPLICATION_ID=your_application_id
 
 # Channel IDs
 WELCOME_VOICE_CHANNEL_ID=voice_channel_id
-RESPONSE_CHANNEL_ID=response_channel_id
 AUDIT_LOG_CHANNEL_ID=audit_log_id
 ROLE_ACTIVITY_LOG_CHANNEL_ID=role_log_id
 
 # Role IDs
-STAFF_ROLE_ID=staff_role_id
-CITIZEN_ROLE_ID=citizen_role_id
 ROLE_ID_TO_GIVE=default_role_id
 ROLE_IDS_ALLOWED=mod_role_ids
 
-# FiveM Settings
-FIVEM_SERVER_IP=your_server_ip
-FIVEM_SERVER_PORT=your_server_port
-
-# File Paths
+# Voice Settings
 WELCOME_SOUND_PATH=welcome.mp3
+WELCOME_SOUND_VOLUME=0.5
 FFMPEG_PATH=/usr/bin/ffmpeg
+DEFAULT_VOLUME=0.5
+VOICE_TIMEOUT=20
+MAX_RECONNECT_ATTEMPTS=10
+RECONNECT_DELAY=1
+MAX_RECONNECT_DELAY=30
+
+# Logging Settings
+LOG_LEVEL=INFO
+LOG_TO_FILE=false
+LOG_DIR=logs
 ```
 
 ### 3. Bot Configuration
 1. Set Python version to 3.8 or higher
 2. Set startup command to: `python3 bot.py`
 3. Enable required intents in Discord Developer Portal:
-   - Presence Intent
-   - Server Members Intent
-   - Message Content Intent
+   - Server Members Intent (for welcome system)
+   - Voice State Intent (for voice features)
 
 ### 4. Start the Bot
 Click "Start" in the control panel

@@ -1,6 +1,6 @@
 # ArabLife Discord Bot
 
-A comprehensive Discord bot for managing ArabLife server with role management, welcome system, leveling, and more.
+A Discord bot for managing ArabLife server with role management, welcome system, and more.
 
 ## Features
 
@@ -12,47 +12,27 @@ A comprehensive Discord bot for managing ArabLife server with role management, w
 2. Welcome System
    - Plays custom welcome sound for new members
    - Automated welcome messages
-   - Custom welcome images
+   - `/testwelcome` - Test the welcome sound system
 
 3. Role Management
    - Role assignment commands
    - Role hierarchy management
    - Role-based permissions
 
-4. Security Features
-   - Anti-spam protection
-   - User verification system
-   - Audit logging
-
-5. Voice Channel Management
-   - Dynamic voice channel creation
+4. Voice Channel Management
    - Voice activity tracking
    - Voice permissions management
+   - Robust voice connection handling
 
-6. FiveM Integration
-   - Server status commands
-   - Player list management
-   - Server information display
+5. Status Commands
+   - Server status monitoring
+   - Bot health checks
+   - System metrics
 
-7. Leveling System
-   - Experience points tracking
-   - Level-based roles
-   - Leaderboard commands
-
-8. Custom Commands
-   - Server-specific custom commands
-   - Dynamic command responses
-   - Command permission management
-
-9. Ticket System
-   - Support ticket creation
-   - Ticket management commands
-   - Ticket archiving
-
-10. AutoMod Features
-    - Message filtering
-    - Spam protection
-    - Auto-moderation actions
+6. Announcement System
+   - Server announcements
+   - Automated notifications
+   - Message management
 
 ## Requirements
 
@@ -94,23 +74,27 @@ APPLICATION_ID=your_application_id_here
 
 # Channel IDs
 WELCOME_VOICE_CHANNEL_ID=voice_channel_id
-RESPONSE_CHANNEL_ID=response_channel_id
 AUDIT_LOG_CHANNEL_ID=audit_log_id
 ROLE_ACTIVITY_LOG_CHANNEL_ID=role_log_id
 
 # Role IDs
-STAFF_ROLE_ID=staff_role_id
-CITIZEN_ROLE_ID=citizen_role_id
 ROLE_ID_TO_GIVE=default_role_id
 ROLE_IDS_ALLOWED=mod_role_ids
 
-# FiveM Settings
-FIVEM_SERVER_IP=your_server_ip
-FIVEM_SERVER_PORT=your_server_port
-
-# File Paths
+# Voice Settings
 WELCOME_SOUND_PATH=welcome.mp3
+WELCOME_SOUND_VOLUME=0.5
 FFMPEG_PATH=/usr/bin/ffmpeg
+DEFAULT_VOLUME=0.5
+VOICE_TIMEOUT=20
+MAX_RECONNECT_ATTEMPTS=10
+RECONNECT_DELAY=1
+MAX_RECONNECT_DELAY=30
+
+# Logging Settings
+LOG_LEVEL=INFO
+LOG_TO_FILE=false
+LOG_DIR=logs
 ```
 
 ## Running the Bot
