@@ -26,6 +26,7 @@ class ArabLifeBot(commands.Bot):
     
     def __init__(self) -> None:
         super().__init__(
+            command_prefix='!',  # Add command prefix for traditional commands
             intents=intents,
             case_insensitive=True  # Make commands case-insensitive
         )
