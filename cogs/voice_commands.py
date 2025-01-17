@@ -15,61 +15,59 @@ class VoiceCommands(Cog):
     def __init__(self, bot):
         self.bot = bot
         self.welcome_channel_id = 1309595750878937240
-        self.log_channel_id = 1327648816874262549
         self.voice_client = None
+        self.is_connecting = False
         # Connect to welcome channel on startup
         bot.loop.create_task(self._connect())
+        bot.loop.create_task(self._heartbeat())
 
-    async def _log_to_discord(self, message):
-        """Log message to Discord channel"""
-        try:
-            if self.bot.is_ready():
-                channel = self.bot.get_channel(self.log_channel_id)
-                if channel:
-                    await channel.send(f"```\n{message}\n```")
-        except Exception as e:
-            logger.error(f"Failed to send log to Discord: {e}")
-
-    def log(self, message, error=False):
-        """Log to both console and Discord"""
-        if error:
-            logger.error(message)
-        else:
-            logger.info(message)
-        asyncio.create_task(self._log_to_discord(message))
+    async def _heartbeat(self):
+        """Keep connection alive"""
+        await self.bot.wait_until_ready()
+        while not self.bot.is_closed():
+            try:
+                channel = self.bot.get_channel(self.welcome_channel_id)
+                if channel and channel.guild.voice_client:
+                    # Use guild's voice client
+                    self.voice_client = channel.guild.voice_client
+                    if not self.voice_client.is_connected():
+                        logger.info("Voice client disconnected in heartbeat")
+                        self.voice_client = None
+                        if not self.is_connecting:
+                            await self._connect()
+                elif not self.is_connecting:
+                    await self._connect()
+            except Exception as e:
+                logger.error(f"Heartbeat error: {str(e)}")
+            await asyncio.sleep(30)
 
     async def _connect(self):
         """Connect to the welcome channel"""
-        await self.bot.wait_until_ready()
-        await asyncio.sleep(5)  # Wait for bot to fully initialize
-        
+        if self.is_connecting:
+            return
+            
+        self.is_connecting = True
         try:
+            await self.bot.wait_until_ready()
             channel = self.bot.get_channel(self.welcome_channel_id)
             if not channel:
-                self.log("Could not find welcome channel", error=True)
+                logger.error("Could not find welcome channel")
                 return
+
+            # Clean up existing connection
+            if channel.guild.voice_client:
+                await channel.guild.voice_client.disconnect(force=True)
+                await asyncio.sleep(2)
 
             # Connect to channel
             self.voice_client = await channel.connect(self_deaf=False)
+            logger.info(f"Connected to channel: {channel.name}")
             
-            # Wait a bit before checking connection
-            await asyncio.sleep(1)
-            
-            if self.voice_client and self.voice_client.is_connected():
-                self.log(f"Successfully connected to {channel.name}")
-            else:
-                self.log("Failed to establish stable connection", error=True)
-                self.voice_client = None
-                # Try to reconnect
-                await asyncio.sleep(5)
-                self.bot.loop.create_task(self._connect())
-                
         except Exception as e:
-            self.log(f"Connection error: {str(e)}", error=True)
+            logger.error(f"Connection error: {str(e)}")
             self.voice_client = None
-            # Try to reconnect
-            await asyncio.sleep(5)
-            self.bot.loop.create_task(self._connect())
+        finally:
+            self.is_connecting = False
 
     @Cog.listener()
     async def on_voice_state_update(self, member, before, after):
@@ -79,26 +77,30 @@ class VoiceCommands(Cog):
 
         if after.channel and after.channel.id == self.welcome_channel_id and before.channel != after.channel:
             try:
-                if not self.voice_client or not self.voice_client.is_connected():
-                    self.log("Voice client disconnected, reconnecting...", error=True)
+                channel = self.bot.get_channel(self.welcome_channel_id)
+                if channel and channel.guild.voice_client:
+                    self.voice_client = channel.guild.voice_client
+                    if self.voice_client.is_connected():
+                        audio = discord.FFmpegPCMAudio('/root/ArabLife/welcome.mp3')
+                        if not self.voice_client.is_playing():
+                            self.voice_client.play(audio)
+                            logger.info(f"Playing welcome sound for {member.name}")
+                    else:
+                        logger.info("Voice client not connected, reconnecting...")
+                        await self._connect()
+                else:
+                    logger.info("No voice client, connecting...")
                     await self._connect()
-                    await asyncio.sleep(1)
-
-                if self.voice_client and self.voice_client.is_connected():
-                    audio = discord.FFmpegPCMAudio('/root/ArabLife/welcome.mp3')
-                    if not self.voice_client.is_playing():
-                        self.voice_client.play(audio)
-                        self.log(f"Playing welcome sound for {member.name}")
             except Exception as e:
-                self.log(f"Playback error: {str(e)}", error=True)
+                logger.error(f"Playback error: {str(e)}")
 
     @Cog.listener()
     async def on_voice_client_disconnect(self):
-        """Reconnect on disconnect"""
-        self.log("Voice client disconnected, reconnecting...", error=True)
+        """Handle disconnect"""
+        logger.info("Voice client disconnected")
         self.voice_client = None
-        await asyncio.sleep(5)
-        await self._connect()
+        if not self.is_connecting:
+            await self._connect()
 
 async def setup(bot):
     """Setup function for loading the cog"""
