@@ -33,6 +33,23 @@ class VoiceCommands(Cog):
         # Connect to welcome channel on startup and start connection check
         bot.loop.create_task(self._delayed_startup())
 
+    def _find_welcome_sound(self):
+        """Find welcome.mp3 in possible locations"""
+        possible_locations = [
+            '/root/ArabLife/welcome.mp3',  # Root directory
+            os.path.join('/root/ArabLife', 'welcome.mp3'),  # Using os.path.join
+            'welcome.mp3',  # Current working directory fallback
+        ]
+        
+        for location in possible_locations:
+            voice_logger.info(f"Looking for welcome sound at: {location}")
+            if os.path.exists(location):
+                voice_logger.info(f"Found welcome sound at: {location}")
+                return location
+        
+        voice_logger.error("Could not find welcome.mp3 in any expected location")
+        return None
+
     async def _delayed_startup(self):
         """Handle startup with appropriate delays"""
         await self.bot.wait_until_ready()
@@ -226,20 +243,24 @@ class VoiceCommands(Cog):
                 if not welcome_channel.guild.voice_client or welcome_channel.guild.voice_client.channel != welcome_channel:
                     await self._ensure_voice_connected()
                 
-                # Play welcome sound if we have a voice client
-                if self.voice_client and os.path.exists('welcome.mp3'):
+                # Find welcome.mp3 file
+                welcome_file = self._find_welcome_sound()
+                if self.voice_client and welcome_file:
                     try:
                         # Play the welcome sound with options for better stability
                         audio_source = discord.FFmpegPCMAudio(
-                            'welcome.mp3',
+                            welcome_file,
                             executable=self.ffmpeg_path,
                             options='-loglevel warning'
                         )
                         transformed_source = discord.PCMVolumeTransformer(audio_source, volume=Config.DEFAULT_VOLUME)
                         
                         if not self.voice_client.is_playing():
-                            self.voice_client.play(transformed_source, after=lambda e: asyncio.create_task(self._after_play(e)))
-                            voice_logger.info(f"Playing welcome sound for {member.name}#{member.discriminator} in {welcome_channel.name}")
+                            try:
+                                self.voice_client.play(transformed_source, after=lambda e: asyncio.create_task(self._after_play(e)))
+                                voice_logger.info(f"Playing welcome sound for {member.name}#{member.discriminator} in {welcome_channel.name}")
+                            except Exception as play_error:
+                                voice_logger.error(f"Error playing welcome sound: {str(play_error)}")
                     except Exception as audio_error:
                         voice_logger.error(f"Error playing audio: {str(audio_error)}")
                 else:
@@ -278,8 +299,9 @@ class VoiceCommands(Cog):
 
             await interaction.response.send_message("*جاري تشغيل صوت الترحيب...*")
 
-            # Play welcome sound if it exists
-            if os.path.exists('welcome.mp3'):
+            # Find welcome.mp3 file
+            welcome_file = self._find_welcome_sound()
+            if welcome_file:
                 # Ensure we're connected to the voice channel
                 if not welcome_channel.guild.voice_client or welcome_channel.guild.voice_client.channel != welcome_channel:
                     await self._ensure_voice_connected()
@@ -289,15 +311,19 @@ class VoiceCommands(Cog):
                     try:
                         # Play the welcome sound with better stability options
                         audio_source = discord.FFmpegPCMAudio(
-                            'welcome.mp3',
+                            welcome_file,
                             executable=self.ffmpeg_path,
                             options='-loglevel warning'
                         )
                         transformed_source = discord.PCMVolumeTransformer(audio_source, volume=Config.DEFAULT_VOLUME)
                         
                         if not self.voice_client.is_playing():
-                            self.voice_client.play(transformed_source, after=lambda e: asyncio.create_task(self._after_play(e)))
-                            voice_logger.info(f"Testing welcome sound in {welcome_channel.name}")
+                            try:
+                                self.voice_client.play(transformed_source, after=lambda e: asyncio.create_task(self._after_play(e)))
+                                voice_logger.info(f"Testing welcome sound in {welcome_channel.name}")
+                            except Exception as play_error:
+                                voice_logger.error(f"Error playing welcome sound: {str(play_error)}")
+                                raise
                     except Exception as e:
                         voice_logger.error(f"Error playing audio: {str(e)}")
                         raise
@@ -459,6 +485,15 @@ class VoiceCommands(Cog):
         """Callback for after audio finishes playing"""
         if error:
             voice_logger.error(f"Error during playback: {str(error)}")
+        else:
+            voice_logger.info("Successfully finished playing welcome sound")
+        
+        # Ensure we stay connected after playing
+        if self.voice_client and self.voice_client.is_connected():
+            self.should_stay_connected = True
+            # Reset any cleanup flags
+            if hasattr(self.voice_client, '_player') and self.voice_client._player:
+                self.voice_client._player = None
 
     async def cog_app_command_error(self, interaction: discord.Interaction, error: app_commands.AppCommandError):
         """Error handler for application commands"""
