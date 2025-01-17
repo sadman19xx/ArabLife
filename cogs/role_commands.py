@@ -13,7 +13,6 @@ class RoleCommands(Cog):
     def __init__(self, bot):
         self.bot = bot
         self._role_cache = {}
-        self.visa_image_url = Config.VISA_IMAGE_URL
         
     async def _check_rate_limit(self, interaction: discord.Interaction) -> bool:
         """Check if user has exceeded rate limit"""
@@ -48,15 +47,9 @@ class RoleCommands(Cog):
                     WHERE guild_id = ? AND user_id = ? AND role_id = ?
                 """, (str(guild_id), str(user_id), str(role_id)))
 
-    async def _check_role_hierarchy(self, interaction_or_ctx, member):
+    async def _check_role_hierarchy(self, interaction: discord.Interaction, member: discord.Member) -> bool:
         """Check if the bot's role is high enough to manage the target member's roles"""
-        guild = interaction_or_ctx.guild if isinstance(interaction_or_ctx, discord.Interaction) else interaction_or_ctx.guild
-        bot_member = guild.get_member(self.bot.user.id)
-        
-        # Check if member has exempt role
-        if any(role.id in Config.EXEMPT_ROLES for role in member.roles):
-            return False
-            
+        bot_member = interaction.guild.get_member(self.bot.user.id)
         return bot_member.top_role > member.top_role
 
     def _get_role(self, guild_id):
@@ -73,38 +66,6 @@ class RoleCommands(Cog):
             raise commands.NoPrivateMessage()
         return True
 
-    def has_allowed_role():
-        """Check if user has one of the allowed roles"""
-        async def predicate(ctx):
-            user_roles = {role.id for role in ctx.author.roles}
-            if not any(role_id in user_roles for role_id in Config.ROLE_IDS_ALLOWED):
-                raise commands.MissingPermissions(['Required role'])
-            return True
-        return commands.check(predicate)
-
-    def has_remove_role():
-        """Check if user has the role that can use مرفوض command"""
-        async def predicate(ctx):
-            user_roles = {role.id for role in ctx.author.roles}
-            if Config.ROLE_ID_REMOVE_ALLOWED not in user_roles:
-                raise commands.MissingPermissions(['Required role to remove roles'])
-            return True
-        return commands.check(predicate)
-
-    async def send_visa_dm(self, member, action="granted"):
-        """Send visa status message with image to member"""
-        try:
-            embed = discord.Embed(
-                title="WELCOME TO LOS SANTOS!" if action == "granted" else "VISA REVOKED",
-                description="YOUR VISA HAS BEEN " + action.upper(),
-                color=discord.Color.green() if action == "granted" else discord.Color.red()
-            )
-            embed.set_image(url=self.visa_image_url)
-            await member.send(embed=embed)
-            return True
-        except discord.Forbidden:
-            return False
-
     @app_commands.command(
         name='مقبول',
         description='Give visa role to a member'
@@ -112,6 +73,11 @@ class RoleCommands(Cog):
     @app_commands.checks.has_permissions(manage_roles=True)
     async def give_role(self, interaction: discord.Interaction, member: discord.Member):
         """Give the specified role to a member"""
+        # Check if user has allowed role
+        if not any(role.id in Config.ROLE_IDS_ALLOWED for role in interaction.user.roles):
+            await interaction.response.send_message('*لا تملك الصلاحية لأستخدام هذا الامر.*', ephemeral=True)
+            return
+
         # Input validation
         if member.bot:
             await interaction.response.send_message('*لا يمكن إعطاء التأشيرة للبوتات.*', ephemeral=True)
@@ -141,7 +107,6 @@ class RoleCommands(Cog):
 
         try:
             await member.add_roles(role)
-            dm_sent = await self.send_visa_dm(member, "granted")
             
             # Track role assignment
             await self._track_role_change(
@@ -153,8 +118,6 @@ class RoleCommands(Cog):
             )
             
             response = '*تم أصدار التاشيرة بنجاح.*'
-            if not dm_sent:
-                response += '\n*لم نتمكن من ارسال رسالة خاصة للعضو.*'
             
             await interaction.response.send_message(response)
             logger.info(f"Role '{role.name}' assigned to {member.name}#{member.discriminator} by {interaction.user.name}#{interaction.user.discriminator}")
@@ -173,6 +136,11 @@ class RoleCommands(Cog):
     @app_commands.checks.cooldown(1, Config.ROLE_COMMAND_COOLDOWN)
     async def remove_role(self, interaction: discord.Interaction, member: discord.Member):
         """Remove the specified role from a member"""
+        # Check if user has allowed role
+        if not any(role.id in Config.ROLE_IDS_ALLOWED for role in interaction.user.roles):
+            await interaction.response.send_message('*لا تملك الصلاحية لأستخدام هذا الامر.*', ephemeral=True)
+            return
+
         # Security checks
         if not self._check_role_hierarchy(interaction, member):
             await interaction.response.send_message('*لا يمكن تعديل أدوار هذا العضو.*', ephemeral=True)
@@ -189,7 +157,6 @@ class RoleCommands(Cog):
 
         try:
             await member.remove_roles(role)
-            dm_sent = await self.send_visa_dm(member, "revoked")
             
             # Track role removal
             await self._track_role_change(
@@ -201,8 +168,6 @@ class RoleCommands(Cog):
             )
             
             response = '*تم الغاء التاشيرة بنجاح.*'
-            if not dm_sent:
-                response += '\n*لم نتمكن من ارسال رسالة خاصة للعضو.*'
             
             await interaction.response.send_message(response)
             logger.info(f"Role '{role.name}' removed from {member.name}#{member.discriminator} by {interaction.user.name}#{interaction.user.discriminator}")
@@ -212,19 +177,6 @@ class RoleCommands(Cog):
         except discord.HTTPException as e:
             await interaction.response.send_message('*حدث خطأ اثناء تعديل الأدوار.*', ephemeral=True)
             logger.error(f"Failed to remove role: {str(e)}")
-
-    @commands.command()
-    @commands.has_permissions(administrator=True)
-    async def test_visa_dm(self, ctx):
-        """Test the visa DM functionality"""
-        try:
-            granted = await self.send_visa_dm(ctx.author, "granted")
-            await ctx.send("Sent 'granted' visa DM" if granted else "Failed to send DM")
-            
-            revoked = await self.send_visa_dm(ctx.author, "revoked")
-            await ctx.send("Sent 'revoked' visa DM" if revoked else "Failed to send DM")
-        except Exception as e:
-            await ctx.send(f"Error testing DMs: {str(e)}")
 
     async def cog_app_command_error(self, interaction: discord.Interaction, error: app_commands.AppCommandError):
         """Error handler for application commands"""
