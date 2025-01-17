@@ -18,26 +18,6 @@ CREATE TABLE IF NOT EXISTS bot_settings (
     FOREIGN KEY(guild_id) REFERENCES guilds(id) ON DELETE CASCADE
 );
 
--- AutoMod settings table
-CREATE TABLE IF NOT EXISTS automod_settings (
-    guild_id TEXT PRIMARY KEY,
-    settings TEXT NOT NULL,
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY(guild_id) REFERENCES guilds(id) ON DELETE CASCADE
-);
-
--- AutoMod logs table
-CREATE TABLE IF NOT EXISTS automod_logs (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    guild_id TEXT NOT NULL,
-    user_id TEXT NOT NULL,
-    action TEXT NOT NULL,
-    reason TEXT,
-    timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY(guild_id) REFERENCES guilds(id) ON DELETE CASCADE
-);
-
 -- Custom commands table
 CREATE TABLE IF NOT EXISTS custom_commands (
     guild_id TEXT,
@@ -78,21 +58,6 @@ CREATE TABLE IF NOT EXISTS ticket_messages (
 );
 CREATE INDEX IF NOT EXISTS idx_ticket_messages_ticket ON ticket_messages(ticket_id);
 
--- User warnings table
-CREATE TABLE IF NOT EXISTS warnings (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    guild_id TEXT NOT NULL,
-    user_id TEXT NOT NULL,
-    moderator_id TEXT NOT NULL,
-    reason TEXT,
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-    expires_at DATETIME,
-    active BOOLEAN DEFAULT 1,
-    FOREIGN KEY(guild_id) REFERENCES guilds(id) ON DELETE CASCADE
-);
-CREATE INDEX IF NOT EXISTS idx_warnings_guild_user ON warnings(guild_id, user_id);
-CREATE INDEX IF NOT EXISTS idx_warnings_active ON warnings(active);
-
 -- User roles tracking table
 CREATE TABLE IF NOT EXISTS user_roles (
     guild_id TEXT NOT NULL,
@@ -118,24 +83,3 @@ CREATE TABLE IF NOT EXISTS command_usage (
 );
 CREATE INDEX IF NOT EXISTS idx_command_usage_guild ON command_usage(guild_id);
 CREATE INDEX IF NOT EXISTS idx_command_usage_user ON command_usage(user_id);
-
--- Security settings table
-CREATE TABLE IF NOT EXISTS security_settings (
-    guild_id TEXT PRIMARY KEY,
-    settings TEXT NOT NULL,
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY(guild_id) REFERENCES guilds(id) ON DELETE CASCADE
-);
-
--- Blacklisted words table
-CREATE TABLE IF NOT EXISTS blacklisted_words (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    guild_id TEXT NOT NULL,
-    word TEXT NOT NULL,
-    added_by TEXT NOT NULL,
-    added_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY(guild_id) REFERENCES guilds(id) ON DELETE CASCADE,
-    UNIQUE(guild_id, word)
-);
-CREATE INDEX IF NOT EXISTS idx_blacklisted_words_guild ON blacklisted_words(guild_id);

@@ -32,12 +32,13 @@ class ArabLifeBot(commands.Bot):
             case_insensitive=True  # Make commands case-insensitive
         )
         
-        # List of cogs to load
+        # List of cogs to load (security features disabled)
         self.initial_extensions = [
             'cogs.welcome_commands',
             'cogs.application_commands',
             'cogs.help_commands',
             'cogs.voice_commands'
+            # Security cog removed to disable auto-moderation and file deletion
         ]
         
         # Don't clear existing commands
