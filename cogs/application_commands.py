@@ -71,42 +71,66 @@ class ApplicationCommands(commands.Cog):
     async def reject(self, interaction: discord.Interaction, user: discord.Member, reason: str):
         try:
             # Defer the response first to prevent timeout
-            await interaction.response.defer(ephemeral=True)
+            try:
+                await interaction.response.defer(ephemeral=True)
+            except discord.NotFound:
+                print("Interaction expired before deferring")
+                return
+            except Exception as e:
+                print(f"Error deferring interaction: {str(e)}")
+                return
 
             # Check if the command user has staff role
             if not self.has_staff_role(interaction.user):
-                await interaction.followup.send("You don't have permission to use this command.", ephemeral=True)
+                try:
+                    await interaction.followup.send("You don't have permission to use this command.", ephemeral=True)
+                except discord.NotFound:
+                    print("Interaction expired while checking permissions")
                 return
 
             # Get the response channel first
             response_channel = self.bot.get_channel(self.response_channel_id)
             if not response_channel:
-                await interaction.followup.send("Could not find the response channel.", ephemeral=True)
+                try:
+                    await interaction.followup.send("Could not find the response channel.", ephemeral=True)
+                except discord.NotFound:
+                    print("Interaction expired while checking response channel")
                 return
 
             # Create and send response message with rejected visa image
-            embed = discord.Embed(
-                title="Application Response",
-                description=f"{user.mention} Visa Application Has Been Rejected!\n\nRejected By: {interaction.user.mention}\nReason: {reason}",
-                color=discord.Color.red()
-            )
+            try:
+                embed = discord.Embed(
+                    title="Application Response",
+                    description=f"{user.mention} Visa Application Has Been Rejected!\n\nRejected By: {interaction.user.mention}\nReason: {reason}",
+                    color=discord.Color.red()
+                )
 
-            # Attach the rejected visa image
-            file = discord.File("assets/reject.png", filename="reject.png")
-            embed.set_image(url="attachment://reject.png")
-            
-            # Send the embed to the response channel
-            await response_channel.send(embed=embed, file=file)
+                # Attach the rejected visa image
+                file = discord.File("assets/reject.png", filename="reject.png")
+                embed.set_image(url="attachment://reject.png")
+                
+                # Send the embed to the response channel
+                await response_channel.send(embed=embed, file=file)
+            except Exception as e:
+                print(f"Error creating/sending embed: {str(e)}")
+                try:
+                    await interaction.followup.send("An error occurred while sending the rejection message.", ephemeral=True)
+                except discord.NotFound:
+                    print("Interaction expired while handling embed error")
+                return
             
             # Send followup to original interaction
-            await interaction.followup.send(f"Successfully rejected {user.mention}'s application.", ephemeral=True)
-
-        except discord.NotFound:
-            print("Interaction expired")
-        except Exception as e:
-            print(f"Error in reject command: {str(e)}")
             try:
-                await interaction.followup.send("An error occurred while processing the command.", ephemeral=True)
+                await interaction.followup.send(f"Successfully rejected {user.mention}'s application.", ephemeral=True)
+            except discord.NotFound:
+                print("Interaction expired while sending success message")
+            except Exception as e:
+                print(f"Error sending success message: {str(e)}")
+
+        except Exception as e:
+            print(f"Unexpected error in reject command: {str(e)}")
+            try:
+                await interaction.followup.send("An unexpected error occurred while processing the command.", ephemeral=True)
             except:
                 pass
 
