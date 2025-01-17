@@ -37,7 +37,8 @@ class ArabLifeBot(commands.Bot):
             'cogs.welcome_commands',
             'cogs.application_commands',
             'cogs.help_commands',
-            'cogs.voice_commands'
+            'cogs.voice_commands',
+            'cogs.announcement_commands'
             # Security cog removed to disable auto-moderation and file deletion
         ]
         
