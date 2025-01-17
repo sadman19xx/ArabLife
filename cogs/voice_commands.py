@@ -23,6 +23,26 @@ class VoiceCommands(Cog):
         self.bot = bot
         # Get FFmpeg path from config or use default paths
         self.ffmpeg_path = Config.FFMPEG_PATH or self._get_ffmpeg_path()
+        self.log_channel_id = 1327648816874262549  # Channel for error logs
+        
+        # Override voice logger to also log to Discord channel
+        async def log_to_discord(message, error=False):
+            try:
+                channel = self.bot.get_channel(self.log_channel_id)
+                if channel:
+                    await channel.send(f"```\n{message}\n```")
+            except Exception as e:
+                voice_logger.error(f"Failed to send log to Discord: {str(e)}")
+        
+        # Store original error function
+        self._original_error = voice_logger.error
+        
+        # Override error function to also log to Discord
+        def new_error(message):
+            self._original_error(message)
+            asyncio.create_task(log_to_discord(message, error=True))
+        
+        voice_logger.error = new_error
         self.reconnect_attempts = 0
         self.max_reconnect_attempts = 10  # Increased max attempts
         self.reconnect_delay = 1  # Start with 1 second delay
