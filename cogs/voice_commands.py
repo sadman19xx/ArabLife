@@ -24,25 +24,7 @@ class VoiceCommands(Cog):
         # Get FFmpeg path from config or use default paths
         self.ffmpeg_path = Config.FFMPEG_PATH or self._get_ffmpeg_path()
         self.log_channel_id = 1327648816874262549  # Channel for error logs
-        
-        # Override voice logger to also log to Discord channel
-        async def log_to_discord(message, error=False):
-            try:
-                channel = self.bot.get_channel(self.log_channel_id)
-                if channel:
-                    await channel.send(f"```\n{message}\n```")
-            except Exception as e:
-                voice_logger.error(f"Failed to send log to Discord: {str(e)}")
-        
-        # Store original error function
-        self._original_error = voice_logger.error
-        
-        # Override error function to also log to Discord
-        def new_error(message):
-            self._original_error(message)
-            asyncio.create_task(log_to_discord(message, error=True))
-        
-        voice_logger.error = new_error
+        self._discord_logger_enabled = True  # Flag to control Discord logging
         self.reconnect_attempts = 0
         self.max_reconnect_attempts = 10  # Increased max attempts
         self.reconnect_delay = 1  # Start with 1 second delay
@@ -52,6 +34,24 @@ class VoiceCommands(Cog):
         self.is_connecting = False  # Lock to prevent multiple simultaneous connection attempts
         # Connect to welcome channel on startup and start connection check
         bot.loop.create_task(self._delayed_startup())
+
+    async def _log_to_discord(self, message):
+        """Safely log message to Discord channel"""
+        if not self._discord_logger_enabled or not self.bot.is_ready():
+            return
+            
+        try:
+            channel = self.bot.get_channel(self.log_channel_id)
+            if channel:
+                await channel.send(f"```\n{message}\n```")
+        except Exception:
+            self._discord_logger_enabled = False  # Disable on error
+    
+    def log_error(self, message):
+        """Log error to both console and Discord"""
+        voice_logger.error(message)
+        if self._discord_logger_enabled:
+            asyncio.create_task(self._log_to_discord(message))
 
     def _find_welcome_sound(self):
         """Find welcome.mp3 in possible locations"""
@@ -67,7 +67,7 @@ class VoiceCommands(Cog):
                 voice_logger.info(f"Found welcome sound at: {location}")
                 return location
         
-        voice_logger.error("Could not find welcome.mp3 in any expected location")
+        self.log_error("Could not find welcome.mp3 in any expected location")
         return None
 
     async def _delayed_startup(self):
@@ -82,7 +82,7 @@ class VoiceCommands(Cog):
         try:
             await self._ensure_voice_connected()
         except Exception as e:
-            voice_logger.error(f"Initial connection failed: {str(e)}")
+            self.log_error(f"Initial connection failed: {str(e)}")
 
     async def _connection_check(self):
         """Periodically check and ensure voice connection"""
@@ -119,7 +119,7 @@ class VoiceCommands(Cog):
                             await asyncio.sleep(60)  # 60 seconds if successful
                             continue
                         except Exception as e:
-                            voice_logger.error(f"Connection check failed: {str(e)}")
+                            self.log_error(f"Connection check failed: {str(e)}")
                             # Shorter delay if connection failed
                             await asyncio.sleep(15)
                             continue
@@ -127,7 +127,7 @@ class VoiceCommands(Cog):
                 # Normal check interval
                 await asyncio.sleep(45)  # Check every 45 seconds
             except Exception as e:
-                voice_logger.error(f"Error in connection check: {str(e)}")
+                self.log_error(f"Error in connection check: {str(e)}")
                 await asyncio.sleep(15)  # 15 second delay on error before next check
 
     async def _ensure_voice_connected(self):
@@ -140,7 +140,7 @@ class VoiceCommands(Cog):
         try:
             welcome_channel = self.bot.get_channel(self.welcome_channel_id)
             if not welcome_channel:
-                voice_logger.error("Could not find welcome channel")
+                self.log_error("Could not find welcome channel")
                 return
             
             # Check if we need to connect
@@ -151,7 +151,7 @@ class VoiceCommands(Cog):
                         await welcome_channel.guild.voice_client.disconnect(force=True)
                         await asyncio.sleep(2)  # Increased delay after disconnect
                     except Exception as e:
-                        voice_logger.error(f"Error cleaning up existing connection: {str(e)}")
+                        self.log_error(f"Error cleaning up existing connection: {str(e)}")
                         await asyncio.sleep(2)  # Wait even if cleanup failed
                 
                 # Connect to the channel with increased timeout
@@ -161,13 +161,13 @@ class VoiceCommands(Cog):
                         self.voice_client = await welcome_channel.connect(timeout=60.0, self_deaf=False, self_mute=False)
                         break  # If successful, break the loop
                     except asyncio.TimeoutError:
-                        voice_logger.error(f"Timeout while connecting to voice channel (attempt {attempt + 1}/2)")
+                        self.log_error(f"Timeout while connecting to voice channel (attempt {attempt + 1}/2)")
                         if attempt < 1:  # If this isn't the last attempt
                             await asyncio.sleep(3)  # Wait before retrying
                             continue
                         raise  # Re-raise on last attempt
                     except Exception as e:
-                        voice_logger.error(f"Error connecting to voice channel: {str(e)}")
+                        self.log_error(f"Error connecting to voice channel: {str(e)}")
                         if attempt < 1:
                             await asyncio.sleep(3)
                             continue
@@ -202,7 +202,7 @@ class VoiceCommands(Cog):
                 voice_logger.info("Already connected to welcome channel")
                 
         except Exception as e:
-            voice_logger.error(f"Error ensuring voice connection: {str(e)}")
+            self.log_error(f"Error ensuring voice connection: {str(e)}")
             # Try to clean up on error
             try:
                 if welcome_channel and welcome_channel.guild.voice_client:
@@ -266,7 +266,7 @@ class VoiceCommands(Cog):
                 # Find welcome.mp3 file
                 welcome_file = self._find_welcome_sound()
                 if not welcome_file:
-                    voice_logger.error("Welcome sound file not found")
+                    self.log_error("Welcome sound file not found")
                     return
                 
                 # Ensure voice client is ready
@@ -290,13 +290,13 @@ class VoiceCommands(Cog):
                                 self.voice_client.play(transformed_source, after=lambda e: asyncio.create_task(self._after_play(e)))
                                 voice_logger.info(f"Playing welcome sound for {member.name}#{member.discriminator} in {welcome_channel.name}")
                             except Exception as play_error:
-                                voice_logger.error(f"Error playing welcome sound: {str(play_error)}")
+                                self.log_error(f"Error playing welcome sound: {str(play_error)}")
                     except Exception as audio_error:
-                        voice_logger.error(f"Error playing audio: {str(audio_error)}")
+                        self.log_error(f"Error playing audio: {str(audio_error)}")
                 else:
-                    voice_logger.warning("Welcome sound file not found or voice client not available")
+                    voice_logger.warning("Voice client not available after reconnection attempt")
             except Exception as e:
-                voice_logger.error(f"Error in voice state update: {str(e)}")
+                self.log_error(f"Error in voice state update: {str(e)}")
 
     @app_commands.command(
         name="testsound",
@@ -332,7 +332,7 @@ class VoiceCommands(Cog):
             # Find welcome.mp3 file
             welcome_file = self._find_welcome_sound()
             if not welcome_file:
-                voice_logger.error("Welcome sound file not found")
+                self.log_error("Welcome sound file not found")
                 await interaction.followup.send("*لم يتم تكوين ملف الصوت.*")
                 return
             
@@ -363,16 +363,16 @@ class VoiceCommands(Cog):
                                 self.voice_client.play(transformed_source, after=lambda e: asyncio.create_task(self._after_play(e)))
                                 voice_logger.info(f"Testing welcome sound in {welcome_channel.name}")
                             except Exception as play_error:
-                                voice_logger.error(f"Error playing welcome sound: {str(play_error)}")
+                                self.log_error(f"Error playing welcome sound: {str(play_error)}")
                                 raise
                     except Exception as e:
-                        voice_logger.error(f"Error playing audio: {str(e)}")
+                        self.log_error(f"Error playing audio: {str(e)}")
                         raise
             else:
                 await interaction.followup.send("*لم يتم تكوين ملف الصوت.*")
 
         except Exception as e:
-            voice_logger.error(f"Error testing welcome sound: {str(e)}")
+            self.log_error(f"Error testing welcome sound: {str(e)}")
             await interaction.followup.send(f"*حدث خطأ أثناء تشغيل الصوت: {str(e)}*")
 
     @app_commands.command(
@@ -406,7 +406,7 @@ class VoiceCommands(Cog):
                     ephemeral=True
                 )
         except Exception as e:
-            voice_logger.error(f"Error changing volume: {str(e)}")
+            self.log_error(f"Error changing volume: {str(e)}")
             await interaction.response.send_message(
                 "*حدث خطأ أثناء تغيير مستوى الصوت.*",
                 ephemeral=True
@@ -487,7 +487,7 @@ class VoiceCommands(Cog):
                         return
                         
                     except Exception as e:
-                        voice_logger.error(f"Failed to reconnect: {str(e)}")
+                        self.log_error(f"Failed to reconnect: {str(e)}")
                         if not self.should_stay_connected:
                             voice_logger.info("Stopping reconnection attempts - bot should not stay connected")
                             return
@@ -502,7 +502,7 @@ class VoiceCommands(Cog):
                         # Continue to next attempt
                 
                 # If we get here, we've exhausted all attempts
-                voice_logger.error("Max reconnection attempts reached")
+                self.log_error("Max reconnection attempts reached")
                 self.reconnect_attempts = 0
                 self.reconnect_delay = 1
                 self.should_stay_connected = False
@@ -515,7 +515,7 @@ class VoiceCommands(Cog):
                     pass
                 self.voice_client = None
             except Exception as e:
-                voice_logger.error(f"Error in reconnection loop: {str(e)}")
+                self.log_error(f"Error in reconnection loop: {str(e)}")
                 self.should_stay_connected = False
                 self.voice_client = None
             finally:
@@ -525,7 +525,7 @@ class VoiceCommands(Cog):
     async def _after_play(self, error):
         """Callback for after audio finishes playing"""
         if error:
-            voice_logger.error(f"Error during playback: {str(error)}")
+            self.log_error(f"Error during playback: {str(error)}")
         else:
             voice_logger.info("Successfully finished playing welcome sound")
         
@@ -549,7 +549,7 @@ class VoiceCommands(Cog):
                 ephemeral=True
             )
         else:
-            voice_logger.error(f"Voice command error: {str(error)}")
+            self.log_error(f"Voice command error: {str(error)}")
             await interaction.response.send_message(
                 "*حدث خطأ غير متوقع.*",
                 ephemeral=True
