@@ -5,6 +5,7 @@ from discord.ext.commands import Cog
 import logging
 import os
 import asyncio
+from collections import deque
 from config import Config
 
 logger = logging.getLogger('discord')
@@ -16,8 +17,42 @@ class VoiceCommands(Cog):
         self.bot = bot
         self.welcome_channel_id = 1309595750878937240
         self.voice_client = None
+        self.audio_queue = deque()  # Queue for handling multiple join events
+        self.is_playing = False
+        self.reconnect_lock = asyncio.Lock()
+        self.heartbeat_task = None
         # Connect to welcome channel on startup
         bot.loop.create_task(self._initial_connect())
+        # Start connection heartbeat
+        bot.loop.create_task(self._connection_heartbeat())
+
+    async def _connection_heartbeat(self):
+        """Monitor and maintain voice connection"""
+        await self.bot.wait_until_ready()
+        while not self.bot.is_closed():
+            try:
+                # Check connection status
+                if not self.voice_client or not self.voice_client.is_connected():
+                    logger.warning("Voice connection lost, attempting to reconnect...")
+                    async with self.reconnect_lock:
+                        await self._connect()
+                else:
+                    # Ensure we're in the correct channel and not deafened
+                    channel = self.bot.get_channel(self.welcome_channel_id)
+                    if channel and self.voice_client.channel != channel:
+                        logger.warning("Bot in wrong channel, moving to correct channel...")
+                        await self._connect()
+                    elif self.voice_client.guild.me.voice.deaf:
+                        logger.warning("Bot is deafened, undeafening...")
+                        await self.voice_client.guild.change_voice_state(
+                            channel=self.voice_client.channel,
+                            self_deaf=False,
+                            self_mute=False
+                        )
+            except Exception as e:
+                logger.error(f"Heartbeat error: {str(e)}")
+            
+            await asyncio.sleep(30)  # Check every 30 seconds
 
     async def _initial_connect(self):
         """Initial connection attempt"""
@@ -96,23 +131,46 @@ class VoiceCommands(Cog):
                 else:
                     logger.error("Max connection attempts reached")
 
-    async def _play_welcome(self, member_name):
-        """Play welcome sound"""
-        try:
-            if self.voice_client and self.voice_client.is_connected():
-                if not self.voice_client.is_playing():
+    async def _play_next(self):
+        """Play next audio in queue if any"""
+        if self.audio_queue and not self.is_playing:
+            member_name = self.audio_queue.popleft()
+            try:
+                if self.voice_client and self.voice_client.is_connected():
                     try:
                         # Use relative path from project root
                         audio = discord.FFmpegPCMAudio('welcome.mp3')
-                        self.voice_client.play(
-                            audio,
-                            after=lambda e: logger.error(f"Playback error: {e}") if e else None
-                        )
+                        
+                        def after_playing(error):
+                            if error:
+                                logger.error(f"Playback error: {error}")
+                            # Schedule _play_next in the event loop
+                            asyncio.run_coroutine_threadsafe(self._after_playing(), self.bot.loop)
+                        
+                        self.is_playing = True
+                        self.voice_client.play(audio, after=after_playing)
                         logger.info(f"Playing welcome sound for {member_name}")
                     except Exception as e:
                         logger.error(f"FFmpeg error: {str(e)}")
-        except Exception as e:
-            logger.error(f"Error playing welcome sound: {str(e)}")
+                        self.is_playing = False
+                        # Try to play next in queue if this one failed
+                        await self._play_next()
+            except Exception as e:
+                logger.error(f"Error playing welcome sound: {str(e)}")
+                self.is_playing = False
+                # Try to play next in queue if this one failed
+                await self._play_next()
+
+    async def _after_playing(self):
+        """Callback for after audio finishes playing"""
+        self.is_playing = False
+        await self._play_next()  # Play next in queue if any
+
+    async def _play_welcome(self, member_name):
+        """Add member to audio queue"""
+        self.audio_queue.append(member_name)
+        logger.info(f"Added {member_name} to welcome audio queue")
+        await self._play_next()
 
     @Cog.listener()
     async def on_voice_state_update(self, member, before, after):
