@@ -1,6 +1,7 @@
 import discord
 from discord.ext import commands
 import logging
+import asyncio
 
 logger = logging.getLogger('discord')
 
@@ -8,70 +9,89 @@ class VoiceCommands(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
         self.channel_id = 1309595750878937240
+        self.voice = None
+        self.lock = asyncio.Lock()
+        self.ready = asyncio.Event()
+        bot.loop.create_task(self._connection_loop())
 
-    async def _ensure_voice(self, channel):
-        """Ensure bot is in voice channel"""
+    async def _log(self, msg: str):
+        """Log message to both console and channel"""
+        logger.info(msg)
         try:
-            # If already connected to this channel, return current client
-            if channel.guild.voice_client and channel.guild.voice_client.channel == channel:
-                return channel.guild.voice_client
+            channel = self.bot.get_channel(self.channel_id)
+            if channel:
+                await channel.send(f"```\n{msg}\n```")
+        except:
+            pass
 
-            # Disconnect if connected to wrong channel
-            if channel.guild.voice_client:
-                await channel.guild.voice_client.disconnect()
+    async def _connection_loop(self):
+        """Maintain voice connection"""
+        await self.bot.wait_until_ready()
+        await asyncio.sleep(5)  # Wait for bot to initialize
+        self.ready.set()
 
-            # Connect to channel
-            voice = await channel.connect(
-                reconnect=True,
-                timeout=None,
-                self_deaf=False
-            )
+        while not self.bot.is_closed():
+            try:
+                channel = self.bot.get_channel(self.channel_id)
+                if not channel:
+                    await asyncio.sleep(5)
+                    continue
 
-            # Set voice state
-            await channel.guild.change_voice_state(
-                channel=channel,
-                self_deaf=False,
-                self_mute=False
-            )
+                async with self.lock:
+                    # Check if we need to connect
+                    if not self.voice or not self.voice.is_connected():
+                        # Clean up any existing connection
+                        if channel.guild.voice_client:
+                            await channel.guild.voice_client.disconnect()
+                            await asyncio.sleep(2)
 
-            return voice
+                        # Connect to voice
+                        self.voice = await channel.connect(
+                            timeout=None,
+                            reconnect=True
+                        )
+                        await self._log("Connected to voice channel")
 
-        except Exception as e:
-            logger.error(f"Voice connection error: {e}")
-            return None
+            except Exception as e:
+                await self._log(f"Connection error: {str(e)}")
+                self.voice = None
+                await asyncio.sleep(5)
 
-    @commands.Cog.listener()
-    async def on_ready(self):
-        """Connect when bot is ready"""
-        channel = self.bot.get_channel(self.channel_id)
-        if channel:
-            await self._ensure_voice(channel)
+            await asyncio.sleep(5)
+
+    async def _play_welcome(self, member_name: str):
+        """Play welcome sound"""
+        await self.ready.wait()  # Wait for bot to be ready
+        
+        async with self.lock:
+            if not self.voice or not self.voice.is_connected():
+                return
+
+            try:
+                if self.voice.is_playing():
+                    self.voice.stop()
+
+                audio = discord.FFmpegPCMAudio('welcome.mp3')
+                self.voice.play(audio)
+                await self._log(f"Playing welcome for {member_name}")
+
+            except Exception as e:
+                await self._log(f"Playback error: {str(e)}")
 
     @commands.Cog.listener()
     async def on_voice_state_update(self, member, before, after):
         """Handle voice states"""
-        channel = self.bot.get_channel(self.channel_id)
-        if not channel:
-            return
+        await self.ready.wait()  # Wait for bot to be ready
 
-        # Handle bot state changes
-        if member.id == self.bot.user.id:
-            if not after.channel or after.channel.id != self.channel_id or after.deaf:
-                voice = await self._ensure_voice(channel)
-                if not voice:
-                    logger.error("Failed to reconnect bot")
-            return
-
-        # Handle user joins
+        # Only handle user joins
         if not member.bot and after.channel and after.channel.id == self.channel_id:
             if before.channel != after.channel:
-                try:
-                    voice = await self._ensure_voice(channel)
-                    if voice and voice.is_connected() and not voice.is_playing():
-                        voice.play(discord.FFmpegPCMAudio('welcome.mp3'))
-                        logger.info(f"Playing welcome for {member.name}")
-                except Exception as e:
-                    logger.error(f"Error playing welcome: {e}")
+                await self._play_welcome(member.name)
+
+    @commands.command()
+    async def rejoin(self, ctx):
+        """Force reconnection"""
+        self.voice = None  # This will trigger reconnect in connection loop
 
 async def setup(bot):
     await bot.add_cog(VoiceCommands(bot))
