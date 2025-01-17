@@ -29,47 +29,112 @@ class VoiceCommands(Cog):
         self.max_reconnect_delay = 30  # Maximum delay between attempts
         self.should_stay_connected = True
         self.welcome_channel_id = 1309595750878937240
+        self.is_connecting = False  # Lock to prevent multiple simultaneous connection attempts
         # Connect to welcome channel on startup and start connection check
-        bot.loop.create_task(self._ensure_voice_connected())
-        bot.loop.create_task(self._connection_check())
+        bot.loop.create_task(self._delayed_startup())
+
+    async def _delayed_startup(self):
+        """Handle startup with appropriate delays"""
+        await self.bot.wait_until_ready()
+        await asyncio.sleep(15)  # Initial delay to let bot fully initialize
+        
+        # Start connection check loop
+        self.bot.loop.create_task(self._connection_check())
+        
+        # Initial connection attempt
+        try:
+            await self._ensure_voice_connected()
+        except Exception as e:
+            voice_logger.error(f"Initial connection failed: {str(e)}")
 
     async def _connection_check(self):
         """Periodically check and ensure voice connection"""
         await self.bot.wait_until_ready()
+        # Initial delay to let bot fully initialize
+        await asyncio.sleep(15)  # Wait 15 seconds before first connection attempt
+        
         while not self.bot.is_closed():
             try:
                 welcome_channel = self.bot.get_channel(self.welcome_channel_id)
                 if welcome_channel:
-                    if not self.voice_client or not self.voice_client.is_connected() or self.voice_client.channel != welcome_channel:
+                    current_voice = welcome_channel.guild.voice_client
+                    needs_reconnect = (
+                        not self.voice_client or 
+                        not self.voice_client.is_connected() or 
+                        self.voice_client.channel != welcome_channel or
+                        (current_voice and current_voice.channel != welcome_channel)
+                    )
+                    
+                    if needs_reconnect:
                         voice_logger.info("Connection check: Reconnecting to voice channel")
-                        await self._ensure_voice_connected()
-                await asyncio.sleep(30)  # Check every 30 seconds
+                        try:
+                            # Clean up any existing connection first
+                            if current_voice:
+                                try:
+                                    await current_voice.disconnect(force=True)
+                                    await asyncio.sleep(2)  # Wait 2 seconds after disconnect
+                                except:
+                                    pass
+                            
+                            # Try to connect
+                            await self._ensure_voice_connected()
+                            # If successful, wait longer before next check
+                            await asyncio.sleep(60)  # 60 seconds if successful
+                            continue
+                        except Exception as e:
+                            voice_logger.error(f"Connection check failed: {str(e)}")
+                            # Shorter delay if connection failed
+                            await asyncio.sleep(15)
+                            continue
+                
+                # Normal check interval
+                await asyncio.sleep(45)  # Check every 45 seconds
             except Exception as e:
                 voice_logger.error(f"Error in connection check: {str(e)}")
-                await asyncio.sleep(5)  # Short delay on error before next check
+                await asyncio.sleep(15)  # 15 second delay on error before next check
 
     async def _ensure_voice_connected(self):
         """Ensure bot is connected to welcome channel"""
-        await self.bot.wait_until_ready()  # Wait for bot to be ready
-        
-        welcome_channel = self.bot.get_channel(self.welcome_channel_id)
-        if not welcome_channel:
-            voice_logger.error("Could not find welcome channel")
+        if self.is_connecting:
+            voice_logger.info("Connection already in progress, skipping")
             return
             
+        self.is_connecting = True
         try:
+            welcome_channel = self.bot.get_channel(self.welcome_channel_id)
+            if not welcome_channel:
+                voice_logger.error("Could not find welcome channel")
+                return
+            
             # Check if we need to connect
             if not welcome_channel.guild.voice_client or welcome_channel.guild.voice_client.channel != welcome_channel:
                 # Clean up any existing connection
                 if welcome_channel.guild.voice_client:
                     try:
                         await welcome_channel.guild.voice_client.disconnect(force=True)
-                        await asyncio.sleep(0.5)  # Add delay after disconnect
+                        await asyncio.sleep(2)  # Increased delay after disconnect
                     except Exception as e:
                         voice_logger.error(f"Error cleaning up existing connection: {str(e)}")
+                        await asyncio.sleep(2)  # Wait even if cleanup failed
                 
-                # Connect to the channel
-                self.voice_client = await welcome_channel.connect(self_deaf=True, timeout=float(Config.VOICE_TIMEOUT))
+                # Connect to the channel with increased timeout
+                for attempt in range(2):  # Try up to 2 times
+                    try:
+                        voice_logger.info(f"Attempting to connect (attempt {attempt + 1}/2)")
+                        self.voice_client = await welcome_channel.connect(self_deaf=True, timeout=60.0)
+                        break  # If successful, break the loop
+                    except asyncio.TimeoutError:
+                        voice_logger.error(f"Timeout while connecting to voice channel (attempt {attempt + 1}/2)")
+                        if attempt < 1:  # If this isn't the last attempt
+                            await asyncio.sleep(3)  # Wait before retrying
+                            continue
+                        raise  # Re-raise on last attempt
+                    except Exception as e:
+                        voice_logger.error(f"Error connecting to voice channel: {str(e)}")
+                        if attempt < 1:
+                            await asyncio.sleep(3)
+                            continue
+                        raise
                 
                 # Set up connection
                 if not hasattr(self.voice_client, '_event_listeners'):
@@ -103,11 +168,14 @@ class VoiceCommands(Cog):
             voice_logger.error(f"Error ensuring voice connection: {str(e)}")
             # Try to clean up on error
             try:
-                if welcome_channel.guild.voice_client:
+                if welcome_channel and welcome_channel.guild.voice_client:
                     await welcome_channel.guild.voice_client.disconnect(force=True)
             except:
                 pass
             raise
+        finally:
+            # Always release the connection lock
+            self.is_connecting = False
 
     @property
     def voice_client(self):
@@ -279,6 +347,10 @@ class VoiceCommands(Cog):
 
     async def _handle_disconnect(self):
         """Handle voice client disconnection"""
+        if self.is_connecting:
+            voice_logger.info("Connection attempt already in progress, skipping reconnect")
+            return
+            
         voice_logger.warning("Voice client disconnected")
         
         if not self.should_stay_connected:
@@ -289,86 +361,99 @@ class VoiceCommands(Cog):
             channel = self.voice_client.channel
             guild = channel.guild
             
-            # Clean up existing voice client
-            try:
-                if guild.voice_client:
-                    await guild.voice_client.disconnect(force=True)
-            except:
-                pass
+            # Set connecting flag
+            self.is_connecting = True
             
-            while self.reconnect_attempts < self.max_reconnect_attempts and self.should_stay_connected:
-                self.reconnect_attempts += 1
-                voice_logger.info(f"Attempting to reconnect (attempt {self.reconnect_attempts}/{self.max_reconnect_attempts})")
-                
-                try:
-                    # Wait with exponential backoff
-                    delay = min(self.reconnect_delay * (2 ** (self.reconnect_attempts - 1)), self.max_reconnect_delay)
-                    voice_logger.info(f"Waiting {delay} seconds before reconnecting...")
-                    await asyncio.sleep(delay)
-                    
-                    if not self.should_stay_connected:
-                        voice_logger.info("Reconnection cancelled - bot should not stay connected")
-                        return
-                    
-                    # Ensure no existing connection
-                    if guild.voice_client:
-                        try:
-                            await guild.voice_client.disconnect(force=True)
-                        except:
-                            pass
-                    
-                    # Reconnect with shorter timeout
-                    self.voice_client = await channel.connect(self_deaf=True, timeout=float(Config.VOICE_TIMEOUT))
-                    
-                    # Set up disconnect handler
-                    if not hasattr(self.voice_client, '_event_listeners'):
-                        self.voice_client._event_listeners = {}
-                    self.voice_client.on_disconnect = self._handle_disconnect
-                    
-                    # Set up heartbeat monitoring
-                    if hasattr(self.voice_client.ws, '_keep_alive'):
-                        if not self.voice_client.ws._keep_alive.is_running():
-                            self.voice_client.ws._keep_alive.start()
-                    
-                    # Verify connection is healthy
-                    if not self.voice_client.is_connected():
-                        raise discord.ClientException("Voice client reports disconnected state after reconnect")
-                    
-                    voice_logger.info("Successfully reconnected to voice")
-                    
-                    # Reset attempts and delay on success
-                    self.reconnect_attempts = 0
-                    self.reconnect_delay = 1
-                    return
-                    
-                except Exception as e:
-                    voice_logger.error(f"Failed to reconnect: {str(e)}")
-                    if not self.should_stay_connected:
-                        voice_logger.info("Stopping reconnection attempts - bot should not stay connected")
-                        return
-                        
-                    # Clean up failed connection
+            try:
+                # Clean up existing voice client
+                if guild.voice_client:
                     try:
-                        if guild.voice_client:
-                            await guild.voice_client.disconnect(force=True)
+                        await guild.voice_client.disconnect(force=True)
+                        await asyncio.sleep(2)  # Increased delay after disconnect
                     except:
                         pass
+                
+                while self.reconnect_attempts < self.max_reconnect_attempts and self.should_stay_connected:
+                    self.reconnect_attempts += 1
+                    voice_logger.info(f"Attempting to reconnect (attempt {self.reconnect_attempts}/{self.max_reconnect_attempts})")
                     
-                    # Continue to next attempt
-            
-            # If we get here, we've exhausted all attempts
-            voice_logger.error("Max reconnection attempts reached")
-            self.reconnect_attempts = 0
-            self.reconnect_delay = 1
-            self.should_stay_connected = False
-            
-            # Final cleanup
-            try:
-                if guild.voice_client:
-                    await guild.voice_client.disconnect(force=True)
-            except:
-                pass
-            self.voice_client = None
+                    try:
+                        # Wait with exponential backoff
+                        delay = min(self.reconnect_delay * (2 ** (self.reconnect_attempts - 1)), self.max_reconnect_delay)
+                        voice_logger.info(f"Waiting {delay} seconds before reconnecting...")
+                        await asyncio.sleep(delay)
+                        
+                        if not self.should_stay_connected:
+                            voice_logger.info("Reconnection cancelled - bot should not stay connected")
+                            return
+                        
+                        # Ensure no existing connection
+                        if guild.voice_client:
+                            try:
+                                await guild.voice_client.disconnect(force=True)
+                                await asyncio.sleep(2)  # Wait after disconnect
+                            except:
+                                pass
+                        
+                        # Reconnect with increased timeout
+                        self.voice_client = await channel.connect(self_deaf=True, timeout=60.0)
+                        
+                        # Set up disconnect handler
+                        if not hasattr(self.voice_client, '_event_listeners'):
+                            self.voice_client._event_listeners = {}
+                        self.voice_client.on_disconnect = self._handle_disconnect
+                        
+                        # Set up heartbeat monitoring
+                        if hasattr(self.voice_client.ws, '_keep_alive'):
+                            if not self.voice_client.ws._keep_alive.is_running():
+                                self.voice_client.ws._keep_alive.start()
+                        
+                        # Verify connection is healthy
+                        if not self.voice_client.is_connected():
+                            raise discord.ClientException("Voice client reports disconnected state after reconnect")
+                        
+                        voice_logger.info("Successfully reconnected to voice")
+                        
+                        # Reset attempts and delay on success
+                        self.reconnect_attempts = 0
+                        self.reconnect_delay = 1
+                        return
+                        
+                    except Exception as e:
+                        voice_logger.error(f"Failed to reconnect: {str(e)}")
+                        if not self.should_stay_connected:
+                            voice_logger.info("Stopping reconnection attempts - bot should not stay connected")
+                            return
+                        
+                        # Clean up failed connection
+                        try:
+                            if guild.voice_client:
+                                await guild.voice_client.disconnect(force=True)
+                        except:
+                            pass
+                        
+                        # Continue to next attempt
+                
+                # If we get here, we've exhausted all attempts
+                voice_logger.error("Max reconnection attempts reached")
+                self.reconnect_attempts = 0
+                self.reconnect_delay = 1
+                self.should_stay_connected = False
+                
+                # Final cleanup
+                try:
+                    if guild.voice_client:
+                        await guild.voice_client.disconnect(force=True)
+                except:
+                    pass
+                self.voice_client = None
+            except Exception as e:
+                voice_logger.error(f"Error in reconnection loop: {str(e)}")
+                self.should_stay_connected = False
+                self.voice_client = None
+            finally:
+                # Always release the connection lock
+                self.is_connecting = False
 
     async def _after_play(self, error):
         """Callback for after audio finishes playing"""
