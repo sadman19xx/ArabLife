@@ -22,7 +22,7 @@ class Config:
     FFMPEG_PATH = os.getenv('FFMPEG_PATH', shutil.which('ffmpeg') or 'ffmpeg')
     DEFAULT_VOLUME = float(os.getenv('DEFAULT_VOLUME', '0.5'))
     SOUND_COMMAND_COOLDOWN = int(os.getenv('SOUND_COMMAND_COOLDOWN', '30'))
-    VOICE_TIMEOUT = int(os.getenv('VOICE_TIMEOUT', '20'))
+    VOICE_TIMEOUT = int(os.getenv('VOICE_TIMEOUT', '5'))  # Reduced default timeout for better responsiveness
     MAX_RECONNECT_ATTEMPTS = int(os.getenv('MAX_RECONNECT_ATTEMPTS', '10'))
     RECONNECT_DELAY = int(os.getenv('RECONNECT_DELAY', '1'))
     MAX_RECONNECT_DELAY = int(os.getenv('MAX_RECONNECT_DELAY', '30'))
