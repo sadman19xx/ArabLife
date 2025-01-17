@@ -46,7 +46,15 @@ class VoiceCommands(Cog):
                 reconnect=True,
                 self_deaf=False
             )
-            logger.info(f"Connected to channel: {channel.name}")
+            
+            # Ensure bot is not deafened after connection
+            await channel.guild.change_voice_state(
+                channel=channel,
+                self_deaf=False,
+                self_mute=False
+            )
+            
+            logger.info(f"Connected to channel: {channel.name} (undeafened)")
 
         except Exception as e:
             logger.error(f"Connection error: {str(e)}")
@@ -57,18 +65,37 @@ class VoiceCommands(Cog):
         try:
             if self.voice_client and self.voice_client.is_connected():
                 if not self.voice_client.is_playing():
-                    audio = discord.FFmpegPCMAudio('/root/ArabLife/welcome.mp3')
-                    self.voice_client.play(
-                        audio,
-                        after=lambda e: logger.error(f"Playback error: {e}") if e else None
-                    )
-                    logger.info(f"Playing welcome sound for {member_name}")
+                    try:
+                        # Use relative path from project root
+                        audio = discord.FFmpegPCMAudio('welcome.mp3')
+                        self.voice_client.play(
+                            audio,
+                            after=lambda e: logger.error(f"Playback error: {e}") if e else None
+                        )
+                        logger.info(f"Playing welcome sound for {member_name}")
+                    except Exception as e:
+                        logger.error(f"FFmpeg error: {str(e)}")
         except Exception as e:
             logger.error(f"Error playing welcome sound: {str(e)}")
 
     @Cog.listener()
     async def on_voice_state_update(self, member, before, after):
         """Handle voice state updates"""
+        # If this is our bot and it was deafened, undeafen it
+        if member.id == self.bot.user.id and after.deaf:
+            try:
+                await member.guild.change_voice_state(
+                    channel=after.channel,
+                    self_deaf=False,
+                    self_mute=False
+                )
+                logger.info("Undeafened bot after voice state change")
+                return
+            except Exception as e:
+                logger.error(f"Error undeafening bot: {str(e)}")
+                return
+
+        # Ignore other bot events
         if member.bot:
             return
 
