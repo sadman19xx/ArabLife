@@ -190,6 +190,11 @@ class WelcomeCommands(commands.Cog):
         except Exception as e:
             self.logger.error(f"Error handling member join: {str(e)}")
 
+    @commands.Cog.listener()
+    async def on_member_remove(self, member):
+        """Handle member leave event"""
+        pass  # No action needed for member leave
+        
 async def setup(bot):
     """Setup function for loading the cog"""
     cog = WelcomeCommands(bot)
