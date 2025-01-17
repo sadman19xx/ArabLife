@@ -177,6 +177,10 @@ class ArabLifeBot(commands.Bot):
         print(f'Bot ID: {self.user.id}')
         print(f'Start Time: {discord.utils.utcnow().strftime("%Y-%m-%d %H:%M:%S UTC")}')
         
+        # Set the default status when the bot starts
+        activity = discord.Activity(type=discord.ActivityType.watching, name="ArabLife")
+        await self.change_presence(activity=activity)
+        
         # Sync commands with Discord
         try:
             guild = discord.Object(id=Config.GUILD_ID)
