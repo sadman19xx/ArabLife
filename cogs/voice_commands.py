@@ -16,91 +16,78 @@ class VoiceCommands(Cog):
         self.bot = bot
         self.welcome_channel_id = 1309595750878937240
         self.voice_client = None
-        self.is_connecting = False
         # Connect to welcome channel on startup
-        bot.loop.create_task(self._connect())
-        bot.loop.create_task(self._heartbeat())
+        bot.loop.create_task(self._initial_connect())
 
-    async def _heartbeat(self):
-        """Keep connection alive"""
+    async def _initial_connect(self):
+        """Initial connection attempt"""
         await self.bot.wait_until_ready()
-        while not self.bot.is_closed():
-            try:
-                channel = self.bot.get_channel(self.welcome_channel_id)
-                if channel and channel.guild.voice_client:
-                    # Use guild's voice client
-                    self.voice_client = channel.guild.voice_client
-                    if not self.voice_client.is_connected():
-                        logger.info("Voice client disconnected in heartbeat")
-                        self.voice_client = None
-                        if not self.is_connecting:
-                            await self._connect()
-                elif not self.is_connecting:
-                    await self._connect()
-            except Exception as e:
-                logger.error(f"Heartbeat error: {str(e)}")
-            await asyncio.sleep(30)
+        await asyncio.sleep(5)  # Wait for bot to fully initialize
+        await self._connect()
 
     async def _connect(self):
         """Connect to the welcome channel"""
-        if self.is_connecting:
-            return
-            
-        self.is_connecting = True
         try:
-            await self.bot.wait_until_ready()
+            # Get channel
             channel = self.bot.get_channel(self.welcome_channel_id)
             if not channel:
                 logger.error("Could not find welcome channel")
                 return
 
-            # Clean up existing connection
-            if channel.guild.voice_client:
-                await channel.guild.voice_client.disconnect(force=True)
-                await asyncio.sleep(2)
+            # Check if already connected
+            if channel.guild.voice_client and channel.guild.voice_client.is_connected():
+                self.voice_client = channel.guild.voice_client
+                logger.info("Using existing voice connection")
+                return
 
             # Connect to channel
-            self.voice_client = await channel.connect(self_deaf=False)
+            self.voice_client = await channel.connect(
+                timeout=60.0,
+                reconnect=True,
+                self_deaf=False
+            )
             logger.info(f"Connected to channel: {channel.name}")
-            
+
         except Exception as e:
             logger.error(f"Connection error: {str(e)}")
             self.voice_client = None
-        finally:
-            self.is_connecting = False
+
+    async def _play_welcome(self, member_name):
+        """Play welcome sound"""
+        try:
+            if self.voice_client and self.voice_client.is_connected():
+                if not self.voice_client.is_playing():
+                    audio = discord.FFmpegPCMAudio('/root/ArabLife/welcome.mp3')
+                    self.voice_client.play(
+                        audio,
+                        after=lambda e: logger.error(f"Playback error: {e}") if e else None
+                    )
+                    logger.info(f"Playing welcome sound for {member_name}")
+        except Exception as e:
+            logger.error(f"Error playing welcome sound: {str(e)}")
 
     @Cog.listener()
     async def on_voice_state_update(self, member, before, after):
-        """Play welcome sound when someone joins"""
+        """Handle voice state updates"""
         if member.bot:
             return
 
         if after.channel and after.channel.id == self.welcome_channel_id and before.channel != after.channel:
-            try:
-                channel = self.bot.get_channel(self.welcome_channel_id)
-                if channel and channel.guild.voice_client:
-                    self.voice_client = channel.guild.voice_client
-                    if self.voice_client.is_connected():
-                        audio = discord.FFmpegPCMAudio('/root/ArabLife/welcome.mp3')
-                        if not self.voice_client.is_playing():
-                            self.voice_client.play(audio)
-                            logger.info(f"Playing welcome sound for {member.name}")
-                    else:
-                        logger.info("Voice client not connected, reconnecting...")
-                        await self._connect()
-                else:
-                    logger.info("No voice client, connecting...")
-                    await self._connect()
-            except Exception as e:
-                logger.error(f"Playback error: {str(e)}")
+            # Ensure we're connected
+            if not self.voice_client or not self.voice_client.is_connected():
+                await self._connect()
+                await asyncio.sleep(1)  # Wait for connection to stabilize
+
+            # Play welcome sound
+            await self._play_welcome(member.name)
 
     @Cog.listener()
     async def on_voice_client_disconnect(self):
-        """Handle disconnect"""
+        """Handle disconnection"""
         logger.info("Voice client disconnected")
         self.voice_client = None
-        if not self.is_connecting:
-            await self._connect()
+        await asyncio.sleep(5)  # Wait before reconnecting
+        await self._connect()
 
 async def setup(bot):
     """Setup function for loading the cog"""
