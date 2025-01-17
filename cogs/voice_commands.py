@@ -121,7 +121,7 @@ class VoiceCommands(Cog):
                 for attempt in range(2):  # Try up to 2 times
                     try:
                         voice_logger.info(f"Attempting to connect (attempt {attempt + 1}/2)")
-                        self.voice_client = await welcome_channel.connect(self_deaf=True, timeout=60.0)
+                        self.voice_client = await welcome_channel.connect(timeout=60.0, self_deaf=False, self_mute=False)
                         break  # If successful, break the loop
                     except asyncio.TimeoutError:
                         voice_logger.error(f"Timeout while connecting to voice channel (attempt {attempt + 1}/2)")
@@ -396,7 +396,7 @@ class VoiceCommands(Cog):
                                 pass
                         
                         # Reconnect with increased timeout
-                        self.voice_client = await channel.connect(self_deaf=True, timeout=60.0)
+                        self.voice_client = await channel.connect(timeout=60.0, self_deaf=False, self_mute=False)
                         
                         # Set up disconnect handler
                         if not hasattr(self.voice_client, '_event_listeners'):
