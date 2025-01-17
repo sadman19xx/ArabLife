@@ -32,6 +32,11 @@ class Config:
     ROLE_ID_TO_GIVE = int(os.getenv('ROLE_ID_TO_GIVE', '0'))
     ROLE_IDS_ALLOWED = [int(id) for id in os.getenv('ROLE_IDS_ALLOWED', '').split(',') if id]
     
+    # Status command settings
+    STATUS_COMMAND_COOLDOWN = 60
+    MAX_STATUS_LENGTH = 100
+    BLACKLISTED_WORDS = []
+    
     # Logging settings
     LOG_LEVEL = os.getenv('LOG_LEVEL', 'INFO')
     LOG_FORMAT = '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
