@@ -109,8 +109,7 @@ class HelpCommands(Cog, LoggerMixin):
             name="إعدادات الترحيب",
             value=(
                 "• `/setwelcomechannel [channel]` - تحديد قناة الترحيب\n"
-                "• `/setwelcomebackground [url]` - تحديد خلفية الترحيب\n"
-                "• `/testwelcome` - اختبار رسالة الترحيب"
+                "• `/setwelcomebackground [url]` - تحديد خلفية الترحيب"
             ),
             inline=False
         )

@@ -39,7 +39,7 @@ class AnnouncementCommands(commands.Cog):
 
         try:
             # Send the announcement
-            await channel.send(f"@everyone {message}")
+            await channel.send(message)
             
             # Confirm to the user
             await interaction.response.send_message(

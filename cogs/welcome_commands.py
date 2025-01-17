@@ -138,37 +138,6 @@ class WelcomeCommands(commands.Cog):
                 pass
             self.voice_client = None
 
-    @discord.app_commands.command(
-        name="testwelcome",
-        description="Test the welcome sound in the configured channel"
-    )
-    async def test_welcome(self, interaction: discord.Interaction):
-        """Slash command to test welcome sound"""
-        try:
-            # Defer the response since voice operations can take time
-            await interaction.response.defer(ephemeral=True)
-            
-            # Attempt to play welcome sound
-            await self.play_welcome_sound()
-            
-            # Send confirmation
-            await interaction.followup.send(
-                "Testing welcome sound in configured welcome channel...",
-                ephemeral=True
-            )
-            
-        except discord.NotFound:
-            self.logger.warning("Test welcome interaction expired")
-        except Exception as e:
-            self.logger.error(f"Error in test welcome slash command: {str(e)}")
-            try:
-                await interaction.followup.send(
-                    f"Error testing welcome sound: {str(e)}",
-                    ephemeral=True
-                )
-            except:
-                pass
-
     @commands.Cog.listener()
     async def on_ready(self):
         """Initialize welcome channel settings when bot starts"""
@@ -226,11 +195,3 @@ async def setup(bot):
     """Setup function for loading the cog"""
     cog = WelcomeCommands(bot)
     await bot.add_cog(cog)
-    
-    try:
-        # Register app commands to guild
-        guild = discord.Object(id=Config.GUILD_ID)
-        bot.tree.add_command(cog.test_welcome, guild=guild)
-        print("Registered welcome test command to guild")
-    except Exception as e:
-        print(f"Failed to register welcome test command: {e}")
