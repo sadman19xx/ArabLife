@@ -137,22 +137,28 @@ class ArabLifeBot(commands.Bot):
                     voice_client = member.guild.voice_client
                     if voice_client:
                         try:
-                            # Wait longer for connection to stabilize
+                            # Wait for connection to stabilize
                             await asyncio.sleep(2)
                             
                             # Verify connection is healthy
-                            if voice_client.is_connected() and hasattr(voice_client, 'ws') and voice_client.ws and not voice_client.ws.closed:
+                            if voice_client.is_connected():
                                 self.shared_voice_client = voice_client
                                 voice_logger.info("Voice connection verified and shared")
                                 
-                                # Ensure keep-alive is running
-                                if hasattr(voice_client.ws, '_keep_alive'):
-                                    if not voice_client.ws._keep_alive.is_running():
-                                        voice_client.ws._keep_alive.start()
-                                        voice_logger.info("Started voice keep-alive")
+                                # Ensure we're not deafened
+                                await asyncio.sleep(1)
+                                await member.guild.change_voice_state(
+                                    channel=after.channel,
+                                    self_deaf=False,
+                                    self_mute=False
+                                )
                             else:
                                 voice_logger.warning("Voice connection unstable, cleaning up")
-                                raise discord.ClientException("Voice connection verification failed")
+                                try:
+                                    await voice_client.disconnect(force=True)
+                                except:
+                                    pass
+                                self.shared_voice_client = None
                         except Exception as e:
                             voice_logger.error(f"Voice connection error: {str(e)}")
                             try:
@@ -162,12 +168,12 @@ class ArabLifeBot(commands.Bot):
                             self.shared_voice_client = None
                 else:
                     voice_logger.info("Bot left voice channel")
-                    try:
-                        if self.shared_voice_client:
+                    if self.shared_voice_client:
+                        try:
                             await self.shared_voice_client.disconnect(force=True)
-                    except:
-                        pass
-                    self.shared_voice_client = None
+                        except:
+                            pass
+                        self.shared_voice_client = None
                     
         except Exception as e:
             voice_logger.error(f"Error monitoring voice state: {str(e)}")
