@@ -36,6 +36,7 @@ class HelpCommands(Cog, LoggerMixin):
                 description=(
                     "اختر فئة للحصول على معلومات مفصلة عن الأوامر المتاحة:\n\n"
                     "👋 `/help welcome` - نظام الترحيب\n"
+                    "🎵 `/help voice` - نظام الصوت\n"
                     "📝 `/help application` - نظام التقديم\n"
                     "📢 `/help announcement` - نظام الإعلانات\n\n"
                     "*استخدم الأمر مع اسم الفئة للحصول على تفاصيل أكثر*"
@@ -67,6 +68,7 @@ class HelpCommands(Cog, LoggerMixin):
         try:
             embeds = {
                 "welcome": self.get_welcome_help(),
+                "voice": self.get_voice_help(),
                 "application": self.get_application_help(),
                 "announcement": self.get_announcement_help()
             }
@@ -110,6 +112,30 @@ class HelpCommands(Cog, LoggerMixin):
             value=(
                 "• `/setwelcomechannel [channel]` - تحديد قناة الترحيب\n"
                 "• `/setwelcomebackground [url]` - تحديد خلفية الترحيب"
+            ),
+            inline=False
+        )
+        
+        return embed
+
+    def get_voice_help(self) -> discord.Embed:
+        """Get help embed for voice commands"""
+        embed = discord.Embed(
+            title="🎵 نظام الصوت",
+            description="أوامر نظام الصوت المتاحة:",
+            color=discord.Color.blue()
+        )
+        
+        embed.add_field(
+            name="أوامر الصوت",
+            value=(
+                "• `!rejoin` - إعادة اتصال البوت بقناة الصوت\n"
+                "  *يستخدم في حالة وجود مشاكل في الصوت*\n\n"
+                "ملاحظات:\n"
+                "• يتم تشغيل صوت الترحيب تلقائياً عند:\n"
+                "  - انضمام عضو جديد للسيرفر\n"
+                "  - دخول عضو لقناة الترحيب\n"
+                "• يتم إعادة الاتصال تلقائياً في حالة وجود مشاكل"
             ),
             inline=False
         )

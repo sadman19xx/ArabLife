@@ -20,9 +20,13 @@ A Discord bot for managing ArabLife server with role management, welcome system,
    - Role-based permissions
 
 4. Voice Channel Management
-   - Voice activity tracking
-   - Voice permissions management
-   - Robust voice connection handling
+   - Automatic welcome sound playback for new members
+   - Welcome sound when users join specific voice channel
+   - Robust connection handling with auto-reconnection
+   - Exponential backoff for reconnection attempts
+   - Volume control and FFmpeg optimization
+   - `!rejoin` command for manual reconnection
+   - Shared voice client coordination
 
 5. Status Commands
    - Server status monitoring
@@ -180,11 +184,21 @@ Service Features:
    - Check application logs: `tail -f /var/log/arablife-bot.log`
    - Check error logs: `tail -f /var/log/arablife-bot.error.log`
    - Verify bot permissions in Discord
-   - Ensure FFmpeg is properly installed
+   - Ensure FFmpeg is properly installed: `ffmpeg -version`
    - Check service configuration: `sudo systemctl cat arablife-bot`
    - Check service status: `sudo systemctl status arablife-bot`
    - Verify file permissions: `ls -la /root/ArabLife/`
    - Check virtual environment: `ls -la /root/ArabLife/venv/`
+
+4. Voice System Issues:
+   - Verify welcome.mp3 exists and is readable
+   - Check FFmpeg installation and permissions
+   - Verify bot has CONNECT and SPEAK permissions
+   - Ensure bot is not server deafened
+   - Check voice channel ID in configuration
+   - Monitor voice connection logs
+   - Use !rejoin command if connection issues persist
+   - Check voice volume settings in .env
 
 ## Support
 

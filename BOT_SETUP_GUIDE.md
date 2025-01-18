@@ -167,9 +167,53 @@ sudo systemctl status arablife-bot
 - Test role commands
 
 ### 4. Voice System
-- Set up voice channels
-- Configure permissions
-- Test voice connection handling
+
+1. Voice Channel Setup
+   - Create a dedicated welcome voice channel
+   - Get the channel ID (Right-click > Copy ID)
+   - Set WELCOME_VOICE_CHANNEL_ID in .env
+   - Ensure bot has these permissions in the channel:
+     * View Channel
+     * Connect
+     * Speak
+     * Use Voice Activity
+     * Priority Speaker (recommended)
+
+2. Welcome Sound Setup
+   - Place welcome.mp3 in bot directory
+   - Verify file permissions: `chmod 644 welcome.mp3`
+   - Test file: `ffplay welcome.mp3`
+   - Configure volume in .env:
+     ```env
+     WELCOME_SOUND_VOLUME=0.5    # 0.1 to 2.0
+     DEFAULT_VOLUME=0.5          # Default playback volume
+     ```
+
+3. FFmpeg Configuration
+   - Verify FFmpeg installation: `ffmpeg -version`
+   - Set path in .env: `FFMPEG_PATH=/usr/bin/ffmpeg`
+   - Test FFmpeg permissions:
+     ```bash
+     sudo -u your-bot-user ffmpeg -version
+     ```
+
+4. Connection Settings
+   - Configure timeouts and reconnection:
+     ```env
+     VOICE_TIMEOUT=20              # Connection timeout
+     MAX_RECONNECT_ATTEMPTS=10     # Max retry attempts
+     RECONNECT_DELAY=1            # Initial retry delay
+     MAX_RECONNECT_DELAY=30       # Maximum retry delay
+     ```
+
+5. Testing Voice System
+   - Start bot and verify it joins voice channel
+   - Test welcome sound:
+     * Join the welcome channel
+     * Sound should play automatically
+   - Test reconnection:
+     * Use !rejoin command
+     * Watch logs for connection status
 
 ### 5. Status Commands
 - Test bot health checks
@@ -197,9 +241,39 @@ sudo systemctl status arablife-bot
    - Verify role hierarchy
 
 3. Voice Issues
-   - Check FFmpeg installation
-   - Verify welcome.mp3 exists
-   - Test voice permissions
+
+   a. Connection Problems
+      - Verify bot permissions in server and channel
+      - Check if bot is server deafened (Server Settings > Members)
+      - Verify voice channel ID is correct
+      - Monitor connection logs: `tail -f logs/discord.log`
+      - Try manual reconnection with !rejoin
+      - Check if multiple bots are trying to use same channel
+
+   b. Audio Problems
+      - Verify FFmpeg installation and permissions
+      - Check welcome.mp3 file:
+        ```bash
+        file welcome.mp3          # Verify file type
+        ffmpeg -i welcome.mp3     # Check audio details
+        ```
+      - Test different volume levels
+      - Check system audio configuration
+      - Verify bot isn't muted in Discord
+
+   c. Performance Issues
+      - Monitor system resources
+      - Check network connectivity
+      - Verify voice channel region
+      - Monitor reconnection attempts in logs
+      - Adjust timeout and retry settings
+
+   d. Common Error Solutions
+      - "FFmpeg not found": Install/reinstall FFmpeg
+      - "Permission denied": Check file and directory permissions
+      - "Already connected": Force disconnect and reconnect
+      - "Connection timeout": Check network and increase timeout
+      - "Voice websocket closed": Use !rejoin command
 
 ### Maintenance
 
