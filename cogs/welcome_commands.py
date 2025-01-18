@@ -40,13 +40,29 @@ class WelcomeCommands(commands.Cog):
             self.logger.error(f"Error initializing welcome channel: {str(e)}")
 
     @commands.Cog.listener()
+    async def on_voice_state_update(self, member, before, after):
+        """Handle member joining voice channel"""
+        if member.bot:
+            return
+
+        try:
+            # Check if member joined the welcome channel
+            if (before.channel != after.channel and 
+                after.channel and 
+                after.channel.id == Config.WELCOME_VOICE_CHANNEL_ID):
+                self.logger.info(f"Member {member.name} joined welcome channel")
+                await self._trigger_welcome_sound(member.name)
+        except Exception as e:
+            self.logger.error(f"Error handling voice state update: {str(e)}")
+
+    @commands.Cog.listener()
     async def on_member_join(self, member):
         """Play welcome sound when a member joins the server"""
         if member.bot:
             return
 
         try:
-            self.logger.info(f"Member {member.name} joined server, triggering welcome sound")
+            self.logger.info(f"Member {member.name} joined server")
             await self._trigger_welcome_sound(member.name)
         except Exception as e:
             self.logger.error(f"Error handling member join: {str(e)}")
@@ -54,7 +70,8 @@ class WelcomeCommands(commands.Cog):
     @commands.Cog.listener()
     async def on_member_remove(self, member):
         """Handle member leave event"""
-        pass  # No action needed for member leave
+        if not member.bot:
+            self.logger.info(f"Member {member.name} left server")
         
 async def setup(bot):
     """Setup function for loading the cog"""
