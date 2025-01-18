@@ -50,8 +50,12 @@ class DiscordHandler(logging.Handler):
         try:
             msg = self.format(record)
             
-            # If bot is ready, send immediately
-            if self.bot.is_ready():
+            # Always print to stderr for errors
+            if record.levelno >= logging.ERROR:
+                print(f"ERROR: {msg}", file=sys.stderr)
+            
+            # Only try Discord logging if bot exists and is ready
+            if hasattr(self, 'bot') and self.bot and hasattr(self.bot, 'is_ready') and self.bot.is_ready():
                 channel = self.bot.get_channel(self.channel_id)
                 if channel:
                     # Split long messages
@@ -81,16 +85,16 @@ class DiscordHandler(logging.Handler):
 
     def flush_queue(self):
         """Send queued messages once bot is ready"""
-        if not self.bot.is_ready():
-            return
-            
-        channel = self.bot.get_channel(self.channel_id)
-        if not channel:
-            return
-            
-        while self.queue:
-            msg = self.queue.pop(0)
-            self.bot.loop.create_task(channel.send(f"```\n{msg}\n```"))
+        try:
+            # Only try Discord logging if bot exists and is ready
+            if hasattr(self, 'bot') and self.bot and hasattr(self.bot, 'is_ready') and self.bot.is_ready():
+                channel = self.bot.get_channel(self.channel_id)
+                if channel:
+                    while self.queue:
+                        msg = self.queue.pop(0)
+                        self.bot.loop.create_task(channel.send(f"```\n{msg}\n```"))
+        except Exception as e:
+            print(f"Failed to flush queue: {e}", file=sys.stderr)
 
 class ErrorHandler(logging.Handler):
     """Custom logging handler for error messages"""
@@ -134,24 +138,23 @@ class AuditHandler(logging.Handler):
         
     def emit(self, record: logging.LogRecord):
         """Emit an audit log record to Discord"""
-        if not self.bot.is_ready():
-            return
-            
         # Only log important events
         event_type = getattr(record, 'event_type', None)
         if not event_type or event_type not in self.important_events:
             return
             
         try:
-            channel = self.bot.get_channel(self.channel_id)
-            if channel:
-                embed = discord.Embed(
-                    title="📝 Audit Log",
-                    description=self.format(record),
-                    color=discord.Color.blue(),
-                    timestamp=discord.utils.utcnow()
-                )
-                self.bot.loop.create_task(channel.send(embed=embed))
+            # Only try Discord logging if bot exists and is ready
+            if hasattr(self, 'bot') and self.bot and hasattr(self.bot, 'is_ready') and self.bot.is_ready():
+                channel = self.bot.get_channel(self.channel_id)
+                if channel:
+                    embed = discord.Embed(
+                        title="📝 Audit Log",
+                        description=self.format(record),
+                        color=discord.Color.blue(),
+                        timestamp=discord.utils.utcnow()
+                    )
+                    self.bot.loop.create_task(channel.send(embed=embed))
         except Exception as e:
             print(f"Failed to log audit event: {e}", file=sys.stderr)
 
