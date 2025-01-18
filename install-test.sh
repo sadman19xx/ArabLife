@@ -49,8 +49,13 @@ mkdir -p data
 if [ ! -f ".env" ]; then
     echo "Creating .env file from example..."
     cp .env.example .env
-    echo "Created .env file. Please update it with your bot settings."
-    echo "Use Discord Developer Mode to get the correct role and channel IDs"
+    echo -e "\n⚠️ IMPORTANT: You only need to set your bot TOKEN in the .env file:"
+    echo "1. Go to Discord Developer Portal (https://discord.com/developers/applications)"
+    echo "2. Select your application"
+    echo "3. Go to Bot section"
+    echo "4. Click 'Reset Token' to get a new token or copy existing one"
+    echo -e "\nEdit the .env file and replace 'your_bot_token_here' with your actual bot token:"
+    echo "nano .env"
 fi
 
 # Make validation script executable

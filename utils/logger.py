@@ -102,19 +102,22 @@ class ErrorHandler(logging.Handler):
         
     def emit(self, record: logging.LogRecord):
         """Emit an error log record to Discord"""
-        if not self.bot.is_ready() or record.levelno < logging.ERROR:
-            return
-            
         try:
-            channel = self.bot.get_channel(self.channel_id)
-            if channel:
-                embed = discord.Embed(
-                    title="⚠️ Error",
-                    description=f"```\n{self.format(record)}\n```",
-                    color=discord.Color.red(),
-                    timestamp=discord.utils.utcnow()
-                )
-                self.bot.loop.create_task(channel.send(embed=embed))
+            # Always print to stderr for critical errors
+            if record.levelno >= logging.ERROR:
+                print(f"ERROR: {self.format(record)}", file=sys.stderr)
+            
+            # Only try Discord logging if bot is ready and connected
+            if hasattr(self, 'bot') and self.bot and getattr(self.bot, 'is_ready', lambda: False)():
+                channel = self.bot.get_channel(self.channel_id)
+                if channel:
+                    embed = discord.Embed(
+                        title="⚠️ Error",
+                        description=f"```\n{self.format(record)}\n```",
+                        color=discord.Color.red(),
+                        timestamp=discord.utils.utcnow()
+                    )
+                    self.bot.loop.create_task(channel.send(embed=embed))
         except Exception as e:
             print(f"Failed to log error: {e}", file=sys.stderr)
 
