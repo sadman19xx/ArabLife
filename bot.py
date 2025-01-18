@@ -56,6 +56,22 @@ class ArabLifeBot(commands.Bot):
             self.tree.clear_commands(guild=None)
             print('Cleared all existing commands')
             
+        # Configure FFmpeg for voice
+        if not os.path.exists(Config.FFMPEG_PATH):
+            print(f"Warning: FFmpeg not found at {Config.FFMPEG_PATH}")
+            # Try to find FFmpeg in system PATH
+            import shutil
+            ffmpeg_path = shutil.which('ffmpeg')
+            if ffmpeg_path:
+                print(f"Found FFmpeg in system PATH: {ffmpeg_path}")
+                Config.FFMPEG_PATH = ffmpeg_path
+            else:
+                print("Warning: FFmpeg not found in system PATH")
+        
+        # Configure voice-related settings
+        discord.VoiceClient.warn_nacl = False
+        discord.FFmpegPCMAudio.DEFAULT_EXECUTABLE = Config.FFMPEG_PATH
+        
         # Load extensions
         try:
             for extension in self.initial_extensions:
@@ -113,25 +129,40 @@ class ArabLifeBot(commands.Bot):
         voice_logger = logging.getLogger('discord.voice')
         
         try:
-            # Only process bot's own voice state
-            if member.id != self.user.id:
-                return
-                
-            # Log voice state changes
-            if before.channel != after.channel:
+            # Log all voice state changes for debugging
+            voice_logger.debug(
+                f"Voice state update for {member.name}: "
+                f"channel: {before.channel} -> {after.channel}, "
+                f"deaf: {before.deaf} -> {after.deaf}, "
+                f"self_deaf: {before.self_deaf} -> {after.self_deaf}"
+            )
+
+            # Process bot's own voice state
+            if member.id == self.user.id:
                 if after.channel:
                     voice_logger.info(f"Bot joined voice channel: {after.channel.name}")
-                    # Ensure bot is not deafened
-                    if after.deaf or after.self_deaf:
-                        try:
+                    # Always ensure bot is not deafened when in a channel
+                    try:
+                        # Force undeafen multiple times to ensure it takes effect
+                        for _ in range(3):
                             await member.guild.change_voice_state(
                                 channel=after.channel,
                                 self_deaf=False,
                                 self_mute=False
                             )
-                            voice_logger.info("Undeafened bot in voice channel")
-                        except Exception as e:
-                            voice_logger.error(f"Failed to undeafen bot: {str(e)}")
+                            await asyncio.sleep(0.5)
+                        voice_logger.info("Ensured bot is not deafened in voice channel")
+                    except Exception as e:
+                        voice_logger.error(f"Failed to undeafen bot: {str(e)}")
+                        # Try to recover by reconnecting
+                        try:
+                            if member.guild.voice_client:
+                                await member.guild.voice_client.disconnect(force=True)
+                            await asyncio.sleep(1)
+                            if after.channel:
+                                await after.channel.connect(self_deaf=False)
+                        except Exception as reconnect_error:
+                            voice_logger.error(f"Failed to recover voice connection: {str(reconnect_error)}")
                     
                     # Update shared voice client
                     voice_client = member.guild.voice_client

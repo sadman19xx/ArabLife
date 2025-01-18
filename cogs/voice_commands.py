@@ -115,14 +115,13 @@ class VoiceCommands(commands.Cog):
     async def _connect_to_voice(self, channel):
         """Connect to voice channel"""
         try:
-            # Check if we're already connected to this channel
-            if self.voice and self.voice.channel and self.voice.channel.id == channel.id:
-                if await self._verify_connection(self.voice):
-                    logger.info("Already connected to correct channel")
-                    return True
-                else:
-                    logger.warning("Existing connection is stale, cleaning up")
-                    await self._cleanup_voice()
+            # Force cleanup of any existing connections first
+            await self._cleanup_voice()
+            
+            # Check if channel is valid
+            if not isinstance(channel, discord.VoiceChannel):
+                logger.error(f"Invalid channel type: {type(channel)}")
+                return False
 
             # Check if channel is valid
             if not isinstance(channel, discord.VoiceChannel):
@@ -137,15 +136,19 @@ class VoiceCommands(commands.Cog):
                 except:
                     pass
 
-            # Connect to voice channel
+            # Connect to voice channel with explicit options
             try:
-                voice_client = await channel.connect(timeout=30.0)
+                voice_client = await channel.connect(
+                    timeout=Config.VOICE_TIMEOUT,
+                    self_deaf=False,  # Explicitly set not deafened
+                    self_mute=False   # Explicitly set not muted
+                )
             except Exception as e:
                 logger.error(f"Failed to connect to voice channel: {e}")
                 return False
 
-            # Wait for connection to stabilize and ensure we're not deafened
-            await asyncio.sleep(1)
+            # Wait for connection to stabilize
+            await asyncio.sleep(Config.VOICE_STABILIZATION_DELAY)
             try:
                 await channel.guild.change_voice_state(
                     channel=channel,
@@ -157,17 +160,40 @@ class VoiceCommands(commands.Cog):
                 logger.error(f"Failed to update voice state: {e}")
                 # Continue anyway as this is not critical
 
-            # Verify connection
-            if await self._verify_connection(voice_client):
-                self.bot.shared_voice_client = voice_client
-                self.voice_ready.set()
-                self._reconnecting = False
-                logger.info(f"Voice connection established in guild {channel.guild.id}")
-                return True
-            else:
-                logger.warning(f"Voice connection verification failed for guild {channel.guild.id}")
-                await self._cleanup_voice()
-                return False
+            # Double-check voice state and force undeafen if needed
+            try:
+                await channel.guild.change_voice_state(
+                    channel=channel,
+                    self_deaf=False,
+                    self_mute=False
+                )
+            except Exception as e:
+                logger.error(f"Failed to update initial voice state: {e}")
+                # Continue anyway as we'll verify the connection next
+
+            # Verify connection with retries
+            for _ in range(3):  # Try up to 3 times
+                if await self._verify_connection(voice_client):
+                    self.bot.shared_voice_client = voice_client
+                    self.voice_ready.set()
+                    self._reconnecting = False
+                    logger.info(f"Voice connection established in guild {channel.guild.id}")
+                    return True
+                else:
+                    logger.warning("Connection verification failed, retrying...")
+                    await asyncio.sleep(1)
+                    try:
+                        await channel.guild.change_voice_state(
+                            channel=channel,
+                            self_deaf=False,
+                            self_mute=False
+                        )
+                    except Exception as e:
+                        logger.error(f"Failed to update voice state during retry: {e}")
+
+            logger.warning(f"Voice connection verification failed after retries for guild {channel.guild.id}")
+            await self._cleanup_voice()
+            return False
 
         except Exception as e:
             logger.error(f"Connection error in guild {getattr(channel.guild, 'id', 'unknown')}: {e}")
