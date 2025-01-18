@@ -134,8 +134,17 @@ class ArabLifeBot(commands.Bot):
                     
                     # Update shared voice client
                     voice_client = member.guild.voice_client
-                    if voice_client and voice_client.is_connected():
+                    if voice_client:
                         self.shared_voice_client = voice_client
+                        # Wait a moment to verify connection
+                        await asyncio.sleep(0.5)
+                        if not voice_client.is_connected():
+                            voice_logger.warning("Voice client disconnected immediately after connect")
+                            try:
+                                await voice_client.disconnect(force=True)
+                            except:
+                                pass
+                            self.shared_voice_client = None
                         
                         # Start keep-alive if needed
                         if (hasattr(voice_client, 'ws') and 
@@ -146,6 +155,11 @@ class ArabLifeBot(commands.Bot):
                             voice_logger.info("Started voice keep-alive")
                 else:
                     voice_logger.info("Bot left voice channel")
+                    try:
+                        if self.shared_voice_client:
+                            await self.shared_voice_client.disconnect(force=True)
+                    except:
+                        pass
                     self.shared_voice_client = None
                     
         except Exception as e:
