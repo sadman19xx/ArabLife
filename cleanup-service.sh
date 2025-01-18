@@ -40,10 +40,16 @@ cleanup_venv() {
         deactivate 2>/dev/null || true
     fi
 
-    # Remove venv directory
+    # Remove venv directory in current location
     if [ -d "venv" ]; then
         echo "Removing virtual environment directory..."
         rm -rf venv
+    fi
+
+    # Remove venv directory in /root/ArabLife if it exists
+    if [ -d "/root/ArabLife/venv" ]; then
+        echo "Removing virtual environment directory in /root/ArabLife..."
+        rm -rf /root/ArabLife/venv
     fi
 
     # Remove any Python cache files
