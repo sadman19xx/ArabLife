@@ -4,15 +4,10 @@ import logging
 import os
 import asyncio
 from config import Config
-from utils.logger import setup_logging
+from utils.bot_logger import get_logger, update_logger
 
-# Set up logging before anything else
-global logger
-logger = setup_logging(
-    None,  # We'll update this with the bot instance later
-    error_log_channel=1327648816874262549,
-    audit_log_channel=1286684861234417704
-)
+# Get logger instance
+logger = get_logger()
 
 # Set up intents with required privileges
 intents = discord.Intents.default()
@@ -117,12 +112,7 @@ class ArabLifeBot(commands.Bot):
         logger.info('------')
         
         # Update logger with bot instance
-        global logger
-        logger = setup_logging(
-            self,
-            error_log_channel=1327648816874262549,
-            audit_log_channel=1286684861234417704
-        )
+        update_logger(self)
 
 async def main():
     """Main function to run the bot"""
