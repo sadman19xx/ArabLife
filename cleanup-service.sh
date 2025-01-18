@@ -10,6 +10,7 @@ check_root() {
 
 # Function to stop and disable service
 cleanup_service() {
+    echo "=== Cleaning up arablife-bot service ==="
     echo "Stopping arablife-bot service..."
     systemctl stop arablife-bot.service
 
@@ -29,6 +30,38 @@ cleanup_service() {
     echo "Service cleanup completed!"
 }
 
+# Function to clean virtual environment
+cleanup_venv() {
+    echo "=== Cleaning up virtual environment ==="
+    
+    # Deactivate venv if it's active
+    if [ -n "$VIRTUAL_ENV" ]; then
+        echo "Deactivating virtual environment..."
+        deactivate 2>/dev/null || true
+    fi
+
+    # Remove venv directory
+    if [ -d "venv" ]; then
+        echo "Removing virtual environment directory..."
+        rm -rf venv
+    fi
+
+    # Remove any Python cache files
+    echo "Removing Python cache files..."
+    find . -type d -name "__pycache__" -exec rm -rf {} + 2>/dev/null || true
+    find . -type f -name "*.pyc" -delete
+    find . -type f -name "*.pyo" -delete
+    find . -type f -name "*.pyd" -delete
+    find . -type d -name ".pytest_cache" -exec rm -rf {} + 2>/dev/null || true
+    find . -type d -name ".coverage" -exec rm -rf {} + 2>/dev/null || true
+    find . -type f -name ".coverage" -delete
+
+    echo "Virtual environment cleanup completed!"
+}
+
 # Main execution
 check_root
 cleanup_service
+cleanup_venv
+
+echo "=== All cleanup tasks completed! ==="
