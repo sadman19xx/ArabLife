@@ -13,6 +13,11 @@ class WelcomeCommands(commands.Cog):
     async def _trigger_welcome_sound(self, member_name: str):
         """Trigger welcome sound through voice commands"""
         try:
+            # Verify voice connection first
+            if not self.bot.shared_voice_client or not self.bot.shared_voice_client.is_connected():
+                self.logger.warning("No active voice connection for welcome sound")
+                return
+
             voice_commands = self.bot.get_cog('VoiceCommands')
             if voice_commands:
                 await voice_commands._play_welcome(member_name)
@@ -62,7 +67,10 @@ class WelcomeCommands(commands.Cog):
             return
 
         try:
-            self.logger.info(f"Member {member.name} joined server")
+            # Wait a moment for voice connection to stabilize
+            await asyncio.sleep(1)
+            
+            self.logger.info(f"Member {member.name} joined server, triggering welcome sound")
             await self._trigger_welcome_sound(member.name)
         except Exception as e:
             self.logger.error(f"Error handling member join: {str(e)}")

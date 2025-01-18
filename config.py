@@ -18,14 +18,18 @@ class Config:
     WELCOME_SOUND_PATH = os.getenv('WELCOME_SOUND_PATH', 'welcome.mp3')
     WELCOME_SOUND_VOLUME = float(os.getenv('WELCOME_SOUND_VOLUME', '0.5'))
     
-    # Voice settings
-    FFMPEG_PATH = os.getenv('FFMPEG_PATH', shutil.which('ffmpeg') or 'ffmpeg')
+    # Voice System Settings
+    FFMPEG_PATH = os.getenv('FFMPEG_PATH', shutil.which('ffmpeg') or '/usr/bin/ffmpeg')
     DEFAULT_VOLUME = float(os.getenv('DEFAULT_VOLUME', '0.5'))
-    SOUND_COMMAND_COOLDOWN = int(os.getenv('SOUND_COMMAND_COOLDOWN', '30'))
-    VOICE_TIMEOUT = int(os.getenv('VOICE_TIMEOUT', '5'))  # Reduced default timeout for better responsiveness
-    MAX_RECONNECT_ATTEMPTS = int(os.getenv('MAX_RECONNECT_ATTEMPTS', '10'))
-    RECONNECT_DELAY = int(os.getenv('RECONNECT_DELAY', '1'))
+    VOICE_TIMEOUT = int(os.getenv('VOICE_TIMEOUT', '20'))  # Increased for stability
+    MAX_RECONNECT_ATTEMPTS = int(os.getenv('MAX_RECONNECT_ATTEMPTS', '3'))  # Reduced to prevent spam
+    RECONNECT_DELAY = int(os.getenv('RECONNECT_DELAY', '5'))  # Increased initial delay
     MAX_RECONNECT_DELAY = int(os.getenv('MAX_RECONNECT_DELAY', '30'))
+    
+    # Voice State Settings
+    VOICE_DEAF_CHECK_INTERVAL = 5  # How often to check if bot is deafened (seconds)
+    VOICE_HEALTH_CHECK_INTERVAL = 10  # How often to verify connection health (seconds)
+    VOICE_CLEANUP_DELAY = 2  # Delay before cleaning up old connections (seconds)
     
     # Role management settings
     ROLE_COMMAND_COOLDOWN = int(os.getenv('ROLE_COMMAND_COOLDOWN', '60'))
@@ -58,7 +62,29 @@ class Config:
         if not cls.ROLE_ID_TO_GIVE:
             raise ValueError("Role ID to give not found in environment variables")
             
-        # Check welcome sound file exists
+        # Validate welcome channel
+        if not cls.WELCOME_VOICE_CHANNEL_ID:
+            raise ValueError("Welcome voice channel ID not found in environment variables")
+            
+        # Validate welcome sound
         welcome_sound_absolute = os.path.abspath(cls.WELCOME_SOUND_PATH)
         if not os.path.exists(welcome_sound_absolute):
             raise ValueError(f"Welcome sound file not found: {welcome_sound_absolute}")
+            
+        # Validate FFmpeg
+        if not shutil.which(cls.FFMPEG_PATH):
+            raise ValueError(f"FFmpeg not found at {cls.FFMPEG_PATH}")
+            
+        # Validate volume settings
+        if not 0.0 <= cls.WELCOME_SOUND_VOLUME <= 2.0:
+            raise ValueError("Welcome sound volume must be between 0.0 and 2.0")
+        if not 0.0 <= cls.DEFAULT_VOLUME <= 2.0:
+            raise ValueError("Default volume must be between 0.0 and 2.0")
+            
+        # Validate timing settings
+        if cls.VOICE_TIMEOUT < 5:
+            raise ValueError("Voice timeout must be at least 5 seconds")
+        if cls.RECONNECT_DELAY < 1:
+            raise ValueError("Reconnect delay must be at least 1 second")
+        if cls.MAX_RECONNECT_DELAY < cls.RECONNECT_DELAY:
+            raise ValueError("Max reconnect delay must be greater than initial delay")

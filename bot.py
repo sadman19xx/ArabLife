@@ -10,11 +10,11 @@ for logger_name in ['discord', 'discord.client', 'discord.http', 'discord.shard'
     logger = logging.getLogger(logger_name)
     logger.setLevel(logging.CRITICAL)  # Only show critical errors
 
-# Keep voice-related logs at WARNING level for debugging
-voice_loggers = ['discord.gateway', 'discord.voice_client']
+# Set up voice-related logging
+voice_loggers = ['discord.gateway', 'discord.voice_client', 'discord.voice']
 for logger_name in voice_loggers:
     logger = logging.getLogger(logger_name)
-    logger.setLevel(logging.WARNING)  # Show warnings and above for voice
+    logger.setLevel(logging.DEBUG)  # Show all voice-related logs for debugging
 
 # Set up intents with required privileges
 intents = discord.Intents.default()
@@ -109,57 +109,53 @@ class ArabLifeBot(commands.Bot):
 
     async def on_voice_state_update(self, member: discord.Member, before: discord.VoiceState, after: discord.VoiceState) -> None:
         """Monitor voice state changes"""
+        voice_logger = logging.getLogger('discord.voice')
+        
         try:
             # Only process bot's own voice state
             if member.id != self.user.id:
                 return
                 
-            voice_logger = logging.getLogger('discord.voice')
-            
             # Log voice state changes
             if before.channel != after.channel:
                 if after.channel:
                     voice_logger.info(f"Bot joined voice channel: {after.channel.name}")
+                    # Ensure bot is not deafened
+                    if after.deaf or after.self_deaf:
+                        try:
+                            await member.guild.change_voice_state(
+                                channel=after.channel,
+                                self_deaf=False,
+                                self_mute=False
+                            )
+                            voice_logger.info("Undeafened bot in voice channel")
+                        except Exception as e:
+                            voice_logger.error(f"Failed to undeafen bot: {str(e)}")
+                    
                     # Update shared voice client
-                    self.shared_voice_client = member.guild.voice_client
+                    voice_client = member.guild.voice_client
+                    if voice_client and voice_client.is_connected():
+                        self.shared_voice_client = voice_client
+                        
+                        # Start keep-alive if needed
+                        if (hasattr(voice_client, 'ws') and 
+                            voice_client.ws and 
+                            hasattr(voice_client.ws, '_keep_alive') and 
+                            not voice_client.ws._keep_alive.is_running()):
+                            voice_client.ws._keep_alive.start()
+                            voice_logger.info("Started voice keep-alive")
                 else:
                     voice_logger.info("Bot left voice channel")
                     self.shared_voice_client = None
                     
-            # Check for potential issues
-            if after.channel:
-                voice_client = member.guild.voice_client
-                if voice_client:
-                    # Update shared voice client
-                    self.shared_voice_client = voice_client
-                    
-                    # Verify connection is healthy
-                    if not voice_client.is_connected():
-                        voice_logger.warning("Voice client reports disconnected state")
-                        try:
-                            await voice_client.disconnect(force=True)
-                            self.shared_voice_client = None
-                        except:
-                            pass
-                            
-                    # Check websocket state
-                    if hasattr(voice_client, 'ws') and voice_client.ws:
-                        if voice_client.ws.closed:
-                            voice_logger.warning("Voice websocket is closed")
-                            try:
-                                await voice_client.disconnect(force=True)
-                                self.shared_voice_client = None
-                            except:
-                                pass
-                                
-                    # Ensure keep-alive is running
-                    if hasattr(voice_client, 'ws') and voice_client.ws and hasattr(voice_client.ws, '_keep_alive'):
-                        if not voice_client.ws._keep_alive.is_running():
-                            voice_logger.warning("Keep-alive not running, restarting...")
-                            voice_client.ws._keep_alive.start()
-                                
         except Exception as e:
             voice_logger.error(f"Error monitoring voice state: {str(e)}")
+            if self.shared_voice_client:
+                try:
+                    await self.shared_voice_client.disconnect(force=True)
+                except:
+                    pass
+                self.shared_voice_client = None
 
     async def on_app_command_error(self, interaction: discord.Interaction, error: discord.app_commands.AppCommandError) -> None:
         """Error handler for application commands"""
