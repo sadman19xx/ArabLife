@@ -7,6 +7,7 @@ from config import Config
 from utils.logger import setup_logging
 
 # Set up logging before anything else
+global logger
 logger = setup_logging(
     None,  # We'll update this with the bot instance later
     error_log_channel=1327648816874262549,
@@ -115,7 +116,6 @@ class ArabLifeBot(commands.Bot):
         logger.info('------')
         
         # Update logger with bot instance
-        global logger
         logger = setup_logging(
             self,
             error_log_channel=1327648816874262549,
