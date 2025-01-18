@@ -24,28 +24,17 @@ class WelcomeCommands(commands.Cog):
                 self.logger.error(f"Channel with ID {Config.WELCOME_VOICE_CHANNEL_ID} is not a voice channel")
                 return False
 
-            # If we're already connected to the right channel, verify connection
+            # If we're already connected to the right channel, return True
             if self.voice_client and self.voice_client.is_connected():
                 if self.voice_client.channel.id == Config.WELCOME_VOICE_CHANNEL_ID:
-                    # Check if connection is healthy by attempting to speak
-                    try:
-                        self.voice_client.send_speaking(False)
-                        return True
-                    except Exception:
-                        self.logger.warning("Unhealthy voice connection, reconnecting...")
-                        try:
-                            await self.voice_client.disconnect(force=True)
-                        except Exception:
-                            pass
+                    return True
                 else:
-                    # Connected to wrong channel
+                    # Only disconnect if connected to wrong channel
                     try:
                         await self.voice_client.disconnect(force=True)
+                        self.voice_client = None
                     except Exception:
                         pass
-                
-                # Clear voice client reference after disconnect
-                self.voice_client = None
 
             try:
                 # Connect to welcome channel
@@ -142,11 +131,13 @@ class WelcomeCommands(commands.Cog):
         """Task to maintain voice connection"""
         while True:
             try:
-                await self.ensure_voice_connection()
-                await asyncio.sleep(30)  # Check connection every 30 seconds
+                # Only try to connect if we're not already connected
+                if not (self.voice_client and self.voice_client.is_connected()):
+                    await self.ensure_voice_connection()
+                await asyncio.sleep(60)  # Check less frequently
             except Exception as e:
                 self.logger.error(f"Error in maintain_voice_connection task: {str(e)}")
-                await asyncio.sleep(5)  # Wait before retrying on error
+                await asyncio.sleep(30)  # Longer delay on error
 
     @commands.Cog.listener()
     async def on_ready(self):
