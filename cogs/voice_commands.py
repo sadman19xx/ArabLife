@@ -13,6 +13,8 @@ class VoiceCommands(commands.Cog):
         self.lock = asyncio.Lock()
         self.ready = asyncio.Event()
         self.voice_ready = asyncio.Event()
+        self.session_id = None
+        self.ws = None
         bot.loop.create_task(self._connection_loop())
 
     @property
@@ -20,9 +22,10 @@ class VoiceCommands(commands.Cog):
         """Get voice client from bot's shared client"""
         return self.bot.shared_voice_client
 
-    async def _log(self, msg: str):
-        """Log message"""
-        logger.info(msg)
+    async def _log(self, msg: str, level: str = 'info'):
+        """Log message to both console and channel"""
+        log_func = getattr(logger, level.lower(), logger.info)
+        log_func(msg)
 
     async def _verify_connection(self, voice_client) -> bool:
         """Verify voice connection is healthy"""
@@ -32,16 +35,31 @@ class VoiceCommands(commands.Cog):
         if not voice_client.is_connected():
             return False
             
-        if hasattr(voice_client, 'ws') and voice_client.ws and voice_client.ws.closed:
+        if not hasattr(voice_client, '_connected'):
             return False
-
-        # Wait for voice client to be fully ready
+            
         try:
+            # Wait for voice client to be fully ready
             await asyncio.wait_for(voice_client._connected.wait(), timeout=5.0)
         except asyncio.TimeoutError:
             return False
             
         return True
+
+    async def _cleanup_voice(self):
+        """Clean up voice resources"""
+        try:
+            if self.voice:
+                if self.voice.is_playing():
+                    self.voice.stop()
+                await self.voice.disconnect(force=True)
+            self.bot.shared_voice_client = None
+            self.voice_ready.clear()
+            self.session_id = None
+            self.ws = None
+            await asyncio.sleep(1)  # Wait for cleanup
+        except Exception as e:
+            logger.error(f"Error cleaning up voice: {e}")
 
     async def _connection_loop(self):
         """Maintain voice connection"""
@@ -49,7 +67,7 @@ class VoiceCommands(commands.Cog):
         await asyncio.sleep(5)  # Wait for bot to initialize
         self.ready.set()
 
-        while True:  # Keep trying to connect
+        while not self.bot.is_closed():
             try:
                 # Check if we already have a connection
                 if self.voice and await self._verify_connection(self.voice):
@@ -57,7 +75,8 @@ class VoiceCommands(commands.Cog):
                     await asyncio.sleep(5)
                     continue
 
-                self.voice_ready.clear()
+                await self._cleanup_voice()
+                
                 channel = self.bot.get_channel(self.channel_id)
                 if not channel:
                     await asyncio.sleep(5)
@@ -65,57 +84,35 @@ class VoiceCommands(commands.Cog):
 
                 # Configure FFmpeg
                 discord.FFmpegPCMAudio.DEFAULT_EXECUTABLE = Config.FFMPEG_PATH
-                
-                # Clean up any existing connection
-                if channel.guild.voice_client:
-                    try:
-                        await channel.guild.voice_client.disconnect(force=True)
-                        await asyncio.sleep(2)  # Increased delay for cleanup
-                    except:
-                        pass
 
-                # Initial connection
+                # Connect with longer timeout
                 voice_client = await channel.connect(
-                    timeout=Config.VOICE_TIMEOUT,
+                    timeout=30.0,  # Increased timeout
                     self_deaf=False,
                     self_mute=False
                 )
 
                 # Wait for connection to stabilize
-                await asyncio.sleep(1)
+                await asyncio.sleep(2)
 
                 # Verify connection
                 if await self._verify_connection(voice_client):
                     self.bot.shared_voice_client = voice_client
-                    await self._log("Made initial voice connection")
-                    
-                    # Start keep-alive if needed
-                    if (hasattr(voice_client, 'ws') and 
-                        voice_client.ws and 
-                        hasattr(voice_client.ws, '_keep_alive')):
-                        voice_client.ws._keep_alive.start()
-                    
-                    # Signal voice is ready
                     self.voice_ready.set()
+                    logger.info("Voice connection established and verified")
                 else:
-                    await self._log("Initial connection verification failed")
-                    try:
-                        await voice_client.disconnect(force=True)
-                    except:
-                        pass
-                    self.bot.shared_voice_client = None
-
-                await asyncio.sleep(5)  # Wait before next check
+                    logger.warning("Voice connection verification failed")
+                    await self._cleanup_voice()
 
             except Exception as e:
-                logger.error(f"Initial connection error: {e}")
-                self.voice_ready.clear()
-                await asyncio.sleep(5)  # Wait before retry
+                logger.error(f"Connection error: {e}")
+                await self._cleanup_voice()
+                await asyncio.sleep(5)
 
     async def _play_welcome(self, member_name: str):
         """Play welcome sound"""
-        # Wait for voice to be ready
         try:
+            # Wait for voice to be ready
             await asyncio.wait_for(self.voice_ready.wait(), timeout=5.0)
         except asyncio.TimeoutError:
             logger.warning(f"Timeout waiting for voice connection for {member_name}")
@@ -138,8 +135,13 @@ class VoiceCommands(commands.Cog):
             # Create and play audio
             audio = discord.FFmpegPCMAudio(Config.WELCOME_SOUND_PATH, **ffmpeg_options)
             transformer = discord.PCMVolumeTransformer(audio, volume=Config.WELCOME_SOUND_VOLUME)
-            self.voice.play(transformer)
-            await self._log(f"Playing welcome for {member_name}")
+            
+            def after_play(error):
+                if error:
+                    logger.error(f"Playback error: {error}")
+            
+            self.voice.play(transformer, after=after_play)
+            logger.info(f"Playing welcome for {member_name}")
 
         except Exception as e:
             logger.error(f"Playback error: {e}")
@@ -151,16 +153,22 @@ class VoiceCommands(commands.Cog):
 
         # Handle bot's own voice state
         if member.id == self.bot.user.id:
-            if after.channel and (after.deaf or after.self_deaf):
-                try:
-                    await member.guild.change_voice_state(
-                        channel=after.channel,
-                        self_deaf=False,
-                        self_mute=False
-                    )
-                    await self._log("Undeafened bot in voice channel")
-                except Exception as e:
-                    logger.error(f"Failed to undeafen bot: {e}")
+            if after.channel:
+                if after.deaf or after.self_deaf:
+                    try:
+                        await member.guild.change_voice_state(
+                            channel=after.channel,
+                            self_deaf=False,
+                            self_mute=False
+                        )
+                        logger.info("Undeafened bot in voice channel")
+                    except Exception as e:
+                        logger.error(f"Failed to undeafen bot: {e}")
+                
+                # Store session ID
+                self.session_id = after.session_id
+            else:
+                await self._cleanup_voice()
             return
 
         # Handle user joins
@@ -173,51 +181,39 @@ class VoiceCommands(commands.Cog):
     async def rejoin(self, ctx):
         """Force reconnection"""
         try:
+            await ctx.send("🔄 Reconnecting to voice channel...")
+            
+            # Clean up existing connection
+            await self._cleanup_voice()
+            
             channel = self.bot.get_channel(self.channel_id)
             if not channel:
                 await ctx.send("❌ Voice channel not found")
                 return
 
-            await ctx.send("🔄 Reconnecting to voice channel...")
-            
-            # Clean up existing connection
-            if self.voice:
-                try:
-                    await self.voice.disconnect(force=True)
-                except:
-                    pass
-            self.bot.shared_voice_client = None
-            self.voice_ready.clear()
-            await asyncio.sleep(2)  # Wait for cleanup
-
-            # New connection
+            # New connection with longer timeout
             voice_client = await channel.connect(
-                timeout=Config.VOICE_TIMEOUT,
+                timeout=30.0,
                 self_deaf=False,
                 self_mute=False
             )
             
             # Wait for connection to stabilize
-            await asyncio.sleep(1)
+            await asyncio.sleep(2)
             
             # Verify connection
             if await self._verify_connection(voice_client):
                 self.bot.shared_voice_client = voice_client
-                # Start keep-alive
-                if hasattr(voice_client, 'ws') and voice_client.ws and hasattr(voice_client.ws, '_keep_alive'):
-                    voice_client.ws._keep_alive.start()
                 self.voice_ready.set()
                 await ctx.send("✅ Successfully reconnected!")
             else:
                 await ctx.send("❌ Connection verification failed")
-                try:
-                    await voice_client.disconnect(force=True)
-                except:
-                    pass
+                await self._cleanup_voice()
                 
         except Exception as e:
             await ctx.send(f"❌ Error during reconnection: {str(e)}")
             logger.error(f"Rejoin error: {e}")
+            await self._cleanup_voice()
 
 async def setup(bot):
     await bot.add_cog(VoiceCommands(bot))

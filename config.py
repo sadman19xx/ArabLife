@@ -21,15 +21,16 @@ class Config:
     # Voice System Settings
     FFMPEG_PATH = os.getenv('FFMPEG_PATH', shutil.which('ffmpeg') or '/usr/bin/ffmpeg')
     DEFAULT_VOLUME = float(os.getenv('DEFAULT_VOLUME', '0.5'))
-    VOICE_TIMEOUT = int(os.getenv('VOICE_TIMEOUT', '20'))  # Increased for stability
-    MAX_RECONNECT_ATTEMPTS = int(os.getenv('MAX_RECONNECT_ATTEMPTS', '3'))  # Reduced to prevent spam
-    RECONNECT_DELAY = int(os.getenv('RECONNECT_DELAY', '5'))  # Increased initial delay
-    MAX_RECONNECT_DELAY = int(os.getenv('MAX_RECONNECT_DELAY', '30'))
+    VOICE_TIMEOUT = int(os.getenv('VOICE_TIMEOUT', '30'))  # Increased for better stability
+    MAX_RECONNECT_ATTEMPTS = int(os.getenv('MAX_RECONNECT_ATTEMPTS', '5'))  # Balanced retry attempts
+    RECONNECT_DELAY = int(os.getenv('RECONNECT_DELAY', '5'))  # Initial delay
+    MAX_RECONNECT_DELAY = int(os.getenv('MAX_RECONNECT_DELAY', '60'))  # Increased max delay
     
     # Voice State Settings
-    VOICE_DEAF_CHECK_INTERVAL = 5  # How often to check if bot is deafened (seconds)
-    VOICE_HEALTH_CHECK_INTERVAL = 10  # How often to verify connection health (seconds)
-    VOICE_CLEANUP_DELAY = 2  # Delay before cleaning up old connections (seconds)
+    VOICE_DEAF_CHECK_INTERVAL = 2  # More frequent deafen checks
+    VOICE_HEALTH_CHECK_INTERVAL = 5  # More frequent health checks
+    VOICE_CLEANUP_DELAY = 2  # Delay before cleaning up old connections
+    VOICE_STABILIZATION_DELAY = 2  # Delay to let connection stabilize
     
     # Role management settings
     ROLE_COMMAND_COOLDOWN = int(os.getenv('ROLE_COMMAND_COOLDOWN', '60'))
