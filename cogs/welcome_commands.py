@@ -69,24 +69,44 @@ class WelcomeCommands(commands.Cog):
             if self.voice_client.is_playing():
                 self.voice_client.stop()
 
-            # Create FFmpeg audio source
+            # Verify welcome sound file exists and is readable
+            welcome_sound_absolute = os.path.abspath(Config.WELCOME_SOUND_PATH)
+            self.logger.info(f"Looking for welcome sound at: {welcome_sound_absolute}")
+            
+            if not os.path.exists(welcome_sound_absolute):
+                self.logger.error(f"Welcome sound file not found: {welcome_sound_absolute}")
+                return
+                
+            if not os.access(welcome_sound_absolute, os.R_OK):
+                self.logger.error(f"Welcome sound file not readable: {welcome_sound_absolute}")
+                return
+
+            self.logger.info(f"Found welcome sound file: {welcome_sound_absolute}")
+            self.logger.info(f"File size: {os.path.getsize(welcome_sound_absolute)} bytes")
+            self.logger.info(f"Creating audio source with FFmpeg at: {Config.FFMPEG_PATH}")
+            
+            # Create FFmpeg audio source with enhanced options for mono->stereo conversion
             audio_source = discord.FFmpegPCMAudio(
-                Config.WELCOME_SOUND_PATH,
-                executable=Config.FFMPEG_PATH
+                welcome_sound_absolute,  # Use absolute path
+                executable=Config.FFMPEG_PATH,
+                options='-loglevel debug -af "aresample=async=1:first_pts=0,pan=stereo|c0=c0|c1=c0"'  # Proper mono to stereo conversion
             )
             
-            # Add volume transformation
+            # Add volume transformation with higher initial volume
             audio_source = discord.PCMVolumeTransformer(
                 audio_source,
-                volume=Config.WELCOME_SOUND_VOLUME
+                volume=Config.WELCOME_SOUND_VOLUME * 2.0  # Double the volume for better audibility
             )
 
-            self.voice_client.play(
-                audio_source,
-                after=lambda e: self.logger.error(f"Error playing welcome sound: {str(e)}") if e else None
-            )
-            
-            self.logger.info(f"Playing welcome sound for {member_name}")
+            def after_play(error):
+                if error:
+                    self.logger.error(f"Error playing welcome sound: {str(error)}")
+                else:
+                    self.logger.info("Welcome sound finished playing successfully")
+
+            self.logger.info(f"Starting welcome sound playback for {member_name}")
+            self.voice_client.play(audio_source, after=after_play)
+            self.logger.info(f"Welcome sound playback initiated for {member_name}")
 
         except Exception as e:
             self.logger.error(f"Error playing welcome sound: {str(e)}")
