@@ -27,23 +27,50 @@ class WelcomeCommands(commands.Cog):
             # If we're already connected to the right channel, verify connection
             if self.voice_client and self.voice_client.is_connected():
                 if self.voice_client.channel.id == Config.WELCOME_VOICE_CHANNEL_ID:
-                    # Check if connection is healthy
-                    if hasattr(self.voice_client, 'ws') and self.voice_client.ws and not self.voice_client.ws.closed:
+                    # Check if connection is healthy by attempting to speak
+                    try:
+                        self.voice_client.send_speaking(False)
                         return True
-                    else:
+                    except Exception:
                         self.logger.warning("Unhealthy voice connection, reconnecting...")
-                        await self.voice_client.disconnect(force=True)
+                        try:
+                            await self.voice_client.disconnect(force=True)
+                        except Exception:
+                            pass
                 else:
                     # Connected to wrong channel
-                    await self.voice_client.disconnect(force=True)
+                    try:
+                        await self.voice_client.disconnect(force=True)
+                    except Exception:
+                        pass
+                
+                # Clear voice client reference after disconnect
+                self.voice_client = None
 
-            # Connect to welcome channel
-            self.voice_client = await channel.connect(
-                timeout=Config.VOICE_TIMEOUT,
-                reconnect=True,
-                self_deaf=False,
-                self_mute=False
-            )
+            try:
+                # Connect to welcome channel
+                self.voice_client = await channel.connect(
+                    timeout=Config.VOICE_TIMEOUT,
+                    reconnect=True,
+                    self_deaf=False,
+                    self_mute=False
+                )
+            except discord.ClientException as e:
+                if "already connected to a voice channel" in str(e):
+                    # Force disconnect all voice clients for this guild
+                    for vc in self.bot.voice_clients:
+                        if vc.guild == channel.guild:
+                            try:
+                                await vc.disconnect(force=True)
+                            except Exception:
+                                pass
+                    # Try connecting again
+                    self.voice_client = await channel.connect(
+                        timeout=Config.VOICE_TIMEOUT,
+                        reconnect=True,
+                        self_deaf=False,
+                        self_mute=False
+                    )
             
             # Ensure we're not deafened
             await asyncio.sleep(1)
