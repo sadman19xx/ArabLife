@@ -12,7 +12,8 @@ class VoiceCommands(commands.Cog):
         self.channel_id = Config.WELCOME_VOICE_CHANNEL_ID
         self.lock = asyncio.Lock()
         self.ready = asyncio.Event()
-        bot.loop.create_task(self._initial_connect())
+        self.voice_ready = asyncio.Event()
+        bot.loop.create_task(self._connection_loop())
 
     @property
     def voice(self):
@@ -33,11 +34,17 @@ class VoiceCommands(commands.Cog):
             
         if hasattr(voice_client, 'ws') and voice_client.ws and voice_client.ws.closed:
             return False
+
+        # Wait for voice client to be fully ready
+        try:
+            await asyncio.wait_for(voice_client._connected.wait(), timeout=5.0)
+        except asyncio.TimeoutError:
+            return False
             
         return True
 
-    async def _initial_connect(self):
-        """Initial voice connection"""
+    async def _connection_loop(self):
+        """Maintain voice connection"""
         await self.bot.wait_until_ready()
         await asyncio.sleep(5)  # Wait for bot to initialize
         self.ready.set()
@@ -46,9 +53,11 @@ class VoiceCommands(commands.Cog):
             try:
                 # Check if we already have a connection
                 if self.voice and await self._verify_connection(self.voice):
+                    self.voice_ready.set()
                     await asyncio.sleep(5)
                     continue
 
+                self.voice_ready.clear()
                 channel = self.bot.get_channel(self.channel_id)
                 if not channel:
                     await asyncio.sleep(5)
@@ -61,7 +70,7 @@ class VoiceCommands(commands.Cog):
                 if channel.guild.voice_client:
                     try:
                         await channel.guild.voice_client.disconnect(force=True)
-                        await asyncio.sleep(1)
+                        await asyncio.sleep(2)  # Increased delay for cleanup
                     except:
                         pass
 
@@ -71,6 +80,9 @@ class VoiceCommands(commands.Cog):
                     self_deaf=False,
                     self_mute=False
                 )
+
+                # Wait for connection to stabilize
+                await asyncio.sleep(1)
 
                 # Verify connection
                 if await self._verify_connection(voice_client):
@@ -82,54 +94,34 @@ class VoiceCommands(commands.Cog):
                         voice_client.ws and 
                         hasattr(voice_client.ws, '_keep_alive')):
                         voice_client.ws._keep_alive.start()
+                    
+                    # Signal voice is ready
+                    self.voice_ready.set()
                 else:
                     await self._log("Initial connection verification failed")
                     try:
                         await voice_client.disconnect(force=True)
                     except:
                         pass
+                    self.bot.shared_voice_client = None
 
                 await asyncio.sleep(5)  # Wait before next check
 
             except Exception as e:
                 logger.error(f"Initial connection error: {e}")
+                self.voice_ready.clear()
                 await asyncio.sleep(5)  # Wait before retry
-
-    async def _ensure_connection(self):
-        """Ensure we have a valid voice connection"""
-        if not self.voice or not await self._verify_connection(self.voice):
-            channel = self.bot.get_channel(self.channel_id)
-            if not channel:
-                return False
-
-            try:
-                # Clean up any existing connection
-                if channel.guild.voice_client:
-                    try:
-                        await channel.guild.voice_client.disconnect(force=True)
-                        await asyncio.sleep(1)
-                    except:
-                        pass
-
-                # New connection
-                voice_client = await channel.connect(
-                    timeout=Config.VOICE_TIMEOUT,
-                    self_deaf=False,
-                    self_mute=False
-                )
-
-                if await self._verify_connection(voice_client):
-                    self.bot.shared_voice_client = voice_client
-                    return True
-            except:
-                pass
-
-            return False
-        return True
 
     async def _play_welcome(self, member_name: str):
         """Play welcome sound"""
-        if not await self._ensure_connection():
+        # Wait for voice to be ready
+        try:
+            await asyncio.wait_for(self.voice_ready.wait(), timeout=5.0)
+        except asyncio.TimeoutError:
+            logger.warning(f"Timeout waiting for voice connection for {member_name}")
+            return
+
+        if not self.voice or not await self._verify_connection(self.voice):
             logger.warning(f"Cannot play welcome for {member_name} - No voice connection")
             return
 
@@ -154,14 +146,28 @@ class VoiceCommands(commands.Cog):
 
     @commands.Cog.listener()
     async def on_voice_state_update(self, member, before, after):
-        """Handle user joins"""
+        """Handle voice states"""
         await self.ready.wait()
 
+        # Handle bot's own voice state
+        if member.id == self.bot.user.id:
+            if after.channel and (after.deaf or after.self_deaf):
+                try:
+                    await member.guild.change_voice_state(
+                        channel=after.channel,
+                        self_deaf=False,
+                        self_mute=False
+                    )
+                    await self._log("Undeafened bot in voice channel")
+                except Exception as e:
+                    logger.error(f"Failed to undeafen bot: {e}")
+            return
+
+        # Handle user joins
         if not member.bot and after.channel and after.channel.id == self.channel_id:
             if before.channel != after.channel:
                 async with self.lock:
-                    if await self._ensure_connection():
-                        await self._play_welcome(member.name)
+                    await self._play_welcome(member.name)
 
     @commands.command()
     async def rejoin(self, ctx):
@@ -181,7 +187,8 @@ class VoiceCommands(commands.Cog):
                 except:
                     pass
             self.bot.shared_voice_client = None
-            await asyncio.sleep(1)  # Wait for cleanup
+            self.voice_ready.clear()
+            await asyncio.sleep(2)  # Wait for cleanup
 
             # New connection
             voice_client = await channel.connect(
@@ -190,12 +197,16 @@ class VoiceCommands(commands.Cog):
                 self_mute=False
             )
             
+            # Wait for connection to stabilize
+            await asyncio.sleep(1)
+            
             # Verify connection
             if await self._verify_connection(voice_client):
                 self.bot.shared_voice_client = voice_client
                 # Start keep-alive
                 if hasattr(voice_client, 'ws') and voice_client.ws and hasattr(voice_client.ws, '_keep_alive'):
                     voice_client.ws._keep_alive.start()
+                self.voice_ready.set()
                 await ctx.send("✅ Successfully reconnected!")
             else:
                 await ctx.send("❌ Connection verification failed")

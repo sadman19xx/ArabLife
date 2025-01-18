@@ -2,6 +2,7 @@ import discord
 from discord.ext import commands
 import logging
 import os
+import asyncio
 from config import Config
 from utils.logger import setup_logging
 
@@ -135,24 +136,30 @@ class ArabLifeBot(commands.Bot):
                     # Update shared voice client
                     voice_client = member.guild.voice_client
                     if voice_client:
-                        self.shared_voice_client = voice_client
-                        # Wait a moment to verify connection
-                        await asyncio.sleep(0.5)
-                        if not voice_client.is_connected():
-                            voice_logger.warning("Voice client disconnected immediately after connect")
+                        try:
+                            # Wait longer for connection to stabilize
+                            await asyncio.sleep(2)
+                            
+                            # Verify connection is healthy
+                            if voice_client.is_connected() and hasattr(voice_client, 'ws') and voice_client.ws and not voice_client.ws.closed:
+                                self.shared_voice_client = voice_client
+                                voice_logger.info("Voice connection verified and shared")
+                                
+                                # Ensure keep-alive is running
+                                if hasattr(voice_client.ws, '_keep_alive'):
+                                    if not voice_client.ws._keep_alive.is_running():
+                                        voice_client.ws._keep_alive.start()
+                                        voice_logger.info("Started voice keep-alive")
+                            else:
+                                voice_logger.warning("Voice connection unstable, cleaning up")
+                                raise discord.ClientException("Voice connection verification failed")
+                        except Exception as e:
+                            voice_logger.error(f"Voice connection error: {str(e)}")
                             try:
                                 await voice_client.disconnect(force=True)
                             except:
                                 pass
                             self.shared_voice_client = None
-                        
-                        # Start keep-alive if needed
-                        if (hasattr(voice_client, 'ws') and 
-                            voice_client.ws and 
-                            hasattr(voice_client.ws, '_keep_alive') and 
-                            not voice_client.ws._keep_alive.is_running()):
-                            voice_client.ws._keep_alive.start()
-                            voice_logger.info("Started voice keep-alive")
                 else:
                     voice_logger.info("Bot left voice channel")
                     try:
