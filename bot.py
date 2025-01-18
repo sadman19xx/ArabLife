@@ -30,7 +30,6 @@ class ArabLifeBot(commands.Bot):
         
         # List of cogs to load (only existing cogs)
         self.initial_extensions = [
-            'cogs.voice_commands',  # Load voice commands first for voice client management
             'cogs.welcome_commands',
             'cogs.application_commands',
             'cogs.help_commands',
@@ -38,9 +37,6 @@ class ArabLifeBot(commands.Bot):
             'cogs.role_commands',
             'cogs.status_commands'
         ]
-        
-        # Shared voice client for coordination between cogs
-        self.shared_voice_client = None
         
         # Clear existing commands to remove stale ones
         self._clear_commands = True
@@ -52,27 +48,10 @@ class ArabLifeBot(commands.Bot):
             self.tree.clear_commands(guild=None)
             logger.info('Cleared all existing commands')
             
-        # Configure FFmpeg for voice
-        if not os.path.exists(Config.FFMPEG_PATH):
-            logger.warning(f"FFmpeg not found at {Config.FFMPEG_PATH}")
-            # Try to find FFmpeg in system PATH
-            import shutil
-            ffmpeg_path = shutil.which('ffmpeg')
-            if ffmpeg_path:
-                logger.info(f"Found FFmpeg in system PATH: {ffmpeg_path}")
-                Config.FFMPEG_PATH = ffmpeg_path
-            else:
-                logger.warning("FFmpeg not found in system PATH")
-        
-        # Configure voice-related settings
+        # Configure voice settings
         discord.VoiceClient.warn_nacl = False
-        discord.FFmpegPCMAudio.DEFAULT_EXECUTABLE = Config.FFMPEG_PATH
-        
-        # Configure voice connection settings
         discord.VoiceClient.default_timeout = Config.VOICE_TIMEOUT
         discord.VoiceClient.default_reconnect = True
-        discord.VoiceClient.default_self_deaf = False
-        discord.VoiceClient.default_self_mute = False
         
         # Load extensions
         try:
@@ -85,158 +64,7 @@ class ArabLifeBot(commands.Bot):
     async def on_error(self, event_method: str, *args, **kwargs) -> None:
         """Global error handler for all events"""
         logger.error(f'Error in {event_method}: {args} {kwargs}')
-        
-        # Special handling for voice state errors
-        if event_method == "voice_state_update":
-            voice_logger = logging.getLogger('discord.voice')
-            voice_logger.error(f"Voice state error: {args} {kwargs}")
-            
-            try:
-                if len(args) >= 3 and isinstance(args[0], discord.Member):
-                    member = args[0]
-                    guild = member.guild
-                    
-                    # Get voice client if it exists
-                    voice_client = guild.voice_client
-                    if voice_client:
-                        # Check if connection is stale
-                        if not voice_client.is_connected() or not voice_client.socket:
-                            voice_logger.warning("Detected stale voice connection, cleaning up...")
-                            try:
-                                await voice_client.disconnect(force=True)
-                            except:
-                                pass
-                        
-                        # Check if websocket is closed
-                        if hasattr(voice_client, 'ws') and voice_client.ws:
-                            if voice_client.ws.closed:
-                                voice_logger.warning("Detected closed websocket, cleaning up...")
-                                try:
-                                    await voice_client.disconnect(force=True)
-                                except:
-                                    pass
-                                
-                        # Ensure keep-alive is running
-                        if hasattr(voice_client, 'ws') and voice_client.ws and hasattr(voice_client.ws, '_keep_alive'):
-                            if not voice_client.ws._keep_alive.is_running():
-                                voice_logger.warning("Keep-alive not running, restarting...")
-                                voice_client.ws._keep_alive.start()
-            except Exception as e:
-                voice_logger.error(f"Error handling voice state: {str(e)}")
-        
         await super().on_error(event_method, *args, **kwargs)
-
-    async def on_voice_state_update(self, member: discord.Member, before: discord.VoiceState, after: discord.VoiceState) -> None:
-        """Monitor voice state changes"""
-        voice_logger = logging.getLogger('discord.voice')
-        
-        try:
-            # Log all voice state changes for debugging
-            voice_logger.debug(
-                f"Voice state update for {member.name}: "
-                f"channel: {before.channel} -> {after.channel}, "
-                f"deaf: {before.deaf} -> {after.deaf}, "
-                f"self_deaf: {before.self_deaf} -> {after.self_deaf}"
-            )
-
-            # Process bot's own voice state
-            if member.id == self.user.id:
-                if after.channel:
-                    voice_logger.info(f"Bot joined voice channel: {after.channel.name}")
-            # Handle voice state changes
-            try:
-                # Ensure bot is not deafened
-                if after.deaf or after.self_deaf:
-                    voice_logger.info("Bot is deafened, attempting to undeafen")
-                    try:
-                        await member.guild.change_voice_state(
-                            channel=after.channel,
-                            self_deaf=False,
-                            self_mute=False
-                        )
-                        voice_logger.info("Successfully undeafened bot")
-                    except Exception as e:
-                        voice_logger.error(f"Failed to undeafen bot: {str(e)}")
-
-                # Verify voice client health
-                voice_client = member.guild.voice_client
-                if voice_client:
-                    # Check websocket health
-                    if hasattr(voice_client, 'ws') and voice_client.ws:
-                        if voice_client.ws.closed:
-                            voice_logger.warning("Voice websocket closed, attempting to reconnect")
-                            try:
-                                await voice_client.disconnect(force=True)
-                                await asyncio.sleep(1)
-                                if after.channel:
-                                    await after.channel.connect(
-                                        timeout=Config.VOICE_TIMEOUT,
-                                        reconnect=True,
-                                        self_deaf=False,
-                                        self_mute=False
-                                    )
-                            except Exception as e:
-                                voice_logger.error(f"Failed to reconnect: {str(e)}")
-                    
-                    # Check keep-alive
-                    if hasattr(voice_client, 'ws') and voice_client.ws and hasattr(voice_client.ws, '_keep_alive'):
-                        if not voice_client.ws._keep_alive.is_running():
-                            voice_logger.warning("Keep-alive not running, restarting")
-                            voice_client.ws._keep_alive.start()
-
-            except Exception as e:
-                voice_logger.error(f"Error handling voice state: {str(e)}")
-            
-            # Update shared voice client
-            voice_client = member.guild.voice_client
-            if voice_client:
-                try:
-                    # Wait for connection to stabilize
-                    await asyncio.sleep(2)
-                    
-                    # Verify connection is healthy
-                    if voice_client.is_connected():
-                        self.shared_voice_client = voice_client
-                        voice_logger.info("Voice connection verified and shared")
-                        
-                        # Ensure we're not deafened
-                        await asyncio.sleep(1)
-                        await member.guild.change_voice_state(
-                            channel=after.channel,
-                            self_deaf=False,
-                            self_mute=False
-                        )
-                    else:
-                        voice_logger.warning("Voice connection unstable, cleaning up")
-                        try:
-                            await voice_client.disconnect(force=True)
-                        except:
-                            pass
-                        self.shared_voice_client = None
-                except Exception as e:
-                    voice_logger.error(f"Voice connection error: {str(e)}")
-                    try:
-                        await voice_client.disconnect(force=True)
-                    except:
-                        pass
-                    self.shared_voice_client = None
-            else:
-                voice_logger.info("Bot left voice channel")
-                if self.shared_voice_client:
-                    try:
-                        await self.shared_voice_client.disconnect(force=True)
-                    except:
-                        pass
-                    self.shared_voice_client = None
-                    
-        except Exception as e:
-            voice_logger.error(f"Error monitoring voice state: {str(e)}")
-            if self.shared_voice_client:
-                try:
-                    await self.shared_voice_client.disconnect(force=True)
-                except:
-                    pass
-                self.shared_voice_client = None
 
     async def on_app_command_error(self, interaction: discord.Interaction, error: discord.app_commands.AppCommandError) -> None:
         """Error handler for application commands"""
