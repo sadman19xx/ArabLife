@@ -18,6 +18,7 @@ logger = setup_logging(
 intents = discord.Intents.default()
 intents.members = True  # Required for on_member_join event
 intents.voice_states = True  # Required for voice channel events and functionality
+intents.message_content = True  # Required for commands to work
 
 class ArabLifeBot(commands.Bot):
     """Custom bot class for ArabLife Discord server functionality"""
@@ -116,6 +117,7 @@ class ArabLifeBot(commands.Bot):
         logger.info('------')
         
         # Update logger with bot instance
+        global logger
         logger = setup_logging(
             self,
             error_log_channel=1327648816874262549,
