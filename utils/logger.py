@@ -171,17 +171,41 @@ def setup_logging(
     console_handler.setFormatter(logging.Formatter(Config.LOG_FORMAT))
     logger.addHandler(console_handler)
     
-    # File handler
+    # File handlers
     if Config.LOG_TO_FILE:
         os.makedirs(Config.LOG_DIR, exist_ok=True)
-        file_handler = RotatingFileHandler(
-            filename=os.path.join(Config.LOG_DIR, 'bot.log'),
+        
+        # Main log file for all levels
+        main_handler = RotatingFileHandler(
+            filename=os.path.join(Config.LOG_DIR, 'arablife-bot.log'),
             maxBytes=5_000_000,  # 5 MB
             backupCount=5,
             encoding='utf-8'
         )
-        file_handler.setFormatter(logging.Formatter(Config.LOG_FORMAT))
-        logger.addHandler(file_handler)
+        main_handler.setFormatter(logging.Formatter(Config.LOG_FORMAT))
+        logger.addHandler(main_handler)
+        
+        # Error log file for ERROR and above
+        error_handler = RotatingFileHandler(
+            filename=os.path.join(Config.LOG_DIR, 'arablife-bot.error.log'),
+            maxBytes=5_000_000,  # 5 MB
+            backupCount=5,
+            encoding='utf-8'
+        )
+        error_handler.setLevel(logging.ERROR)
+        error_handler.setFormatter(logging.Formatter(Config.LOG_FORMAT))
+        logger.addHandler(error_handler)
+        
+        # Debug log file for DEBUG level
+        debug_handler = RotatingFileHandler(
+            filename=os.path.join(Config.LOG_DIR, 'arablife-bot.debug.log'),
+            maxBytes=5_000_000,  # 5 MB
+            backupCount=5,
+            encoding='utf-8'
+        )
+        debug_handler.setLevel(logging.DEBUG)
+        debug_handler.setFormatter(logging.Formatter(Config.LOG_FORMAT))
+        logger.addHandler(debug_handler)
     
     # Discord channel handlers
     if error_log_channel:

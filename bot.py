@@ -6,16 +6,12 @@ import asyncio
 from config import Config
 from utils.logger import setup_logging
 
-# Configure discord.py logging
-for logger_name in ['discord', 'discord.client', 'discord.http', 'discord.shard']:
-    logger = logging.getLogger(logger_name)
-    logger.setLevel(logging.CRITICAL)  # Only show critical errors
-
-# Set up voice-related logging
-voice_loggers = ['discord.gateway', 'discord.voice_client', 'discord.voice']
-for logger_name in voice_loggers:
-    logger = logging.getLogger(logger_name)
-    logger.setLevel(logging.DEBUG)  # Show all voice-related logs for debugging
+# Set up logging before anything else
+logger = setup_logging(
+    None,  # We'll update this with the bot instance later
+    error_log_channel=1327648816874262549,
+    audit_log_channel=1286684861234417704
+)
 
 # Set up intents with required privileges
 intents = discord.Intents.default()
@@ -54,35 +50,41 @@ class ArabLifeBot(commands.Bot):
         # Clear existing commands if requested
         if self._clear_commands:
             self.tree.clear_commands(guild=None)
-            print('Cleared all existing commands')
+            logger.info('Cleared all existing commands')
             
         # Configure FFmpeg for voice
         if not os.path.exists(Config.FFMPEG_PATH):
-            print(f"Warning: FFmpeg not found at {Config.FFMPEG_PATH}")
+            logger.warning(f"FFmpeg not found at {Config.FFMPEG_PATH}")
             # Try to find FFmpeg in system PATH
             import shutil
             ffmpeg_path = shutil.which('ffmpeg')
             if ffmpeg_path:
-                print(f"Found FFmpeg in system PATH: {ffmpeg_path}")
+                logger.info(f"Found FFmpeg in system PATH: {ffmpeg_path}")
                 Config.FFMPEG_PATH = ffmpeg_path
             else:
-                print("Warning: FFmpeg not found in system PATH")
+                logger.warning("FFmpeg not found in system PATH")
         
         # Configure voice-related settings
         discord.VoiceClient.warn_nacl = False
         discord.FFmpegPCMAudio.DEFAULT_EXECUTABLE = Config.FFMPEG_PATH
         
+        # Configure voice connection settings
+        discord.VoiceClient.default_timeout = Config.VOICE_TIMEOUT
+        discord.VoiceClient.default_reconnect = True
+        discord.VoiceClient.default_self_deaf = False
+        discord.VoiceClient.default_self_mute = False
+        
         # Load extensions
         try:
             for extension in self.initial_extensions:
                 await self.load_extension(extension)
-                print(f'Loaded {extension}')
+                logger.info(f'Loaded {extension}')
         except Exception as e:
-            print(f'Failed to load extensions: {str(e)}')
+            logger.error(f'Failed to load extensions: {str(e)}')
 
     async def on_error(self, event_method: str, *args, **kwargs) -> None:
         """Global error handler for all events"""
-        print(f'Error in {event_method}: {args} {kwargs}')
+        logger.error(f'Error in {event_method}: {args} {kwargs}')
         
         # Special handling for voice state errors
         if event_method == "voice_state_update":
@@ -141,70 +143,91 @@ class ArabLifeBot(commands.Bot):
             if member.id == self.user.id:
                 if after.channel:
                     voice_logger.info(f"Bot joined voice channel: {after.channel.name}")
-                    # Always ensure bot is not deafened when in a channel
+            # Handle voice state changes
+            try:
+                # Ensure bot is not deafened
+                if after.deaf or after.self_deaf:
+                    voice_logger.info("Bot is deafened, attempting to undeafen")
                     try:
-                        # Force undeafen multiple times to ensure it takes effect
-                        for _ in range(3):
-                            await member.guild.change_voice_state(
-                                channel=after.channel,
-                                self_deaf=False,
-                                self_mute=False
-                            )
-                            await asyncio.sleep(0.5)
-                        voice_logger.info("Ensured bot is not deafened in voice channel")
+                        await member.guild.change_voice_state(
+                            channel=after.channel,
+                            self_deaf=False,
+                            self_mute=False
+                        )
+                        voice_logger.info("Successfully undeafened bot")
                     except Exception as e:
                         voice_logger.error(f"Failed to undeafen bot: {str(e)}")
-                        # Try to recover by reconnecting
-                        try:
-                            if member.guild.voice_client:
-                                await member.guild.voice_client.disconnect(force=True)
-                            await asyncio.sleep(1)
-                            if after.channel:
-                                await after.channel.connect(self_deaf=False)
-                        except Exception as reconnect_error:
-                            voice_logger.error(f"Failed to recover voice connection: {str(reconnect_error)}")
-                    
-                    # Update shared voice client
-                    voice_client = member.guild.voice_client
-                    if voice_client:
-                        try:
-                            # Wait for connection to stabilize
-                            await asyncio.sleep(2)
-                            
-                            # Verify connection is healthy
-                            if voice_client.is_connected():
-                                self.shared_voice_client = voice_client
-                                voice_logger.info("Voice connection verified and shared")
-                                
-                                # Ensure we're not deafened
-                                await asyncio.sleep(1)
-                                await member.guild.change_voice_state(
-                                    channel=after.channel,
-                                    self_deaf=False,
-                                    self_mute=False
-                                )
-                            else:
-                                voice_logger.warning("Voice connection unstable, cleaning up")
-                                try:
-                                    await voice_client.disconnect(force=True)
-                                except:
-                                    pass
-                                self.shared_voice_client = None
-                        except Exception as e:
-                            voice_logger.error(f"Voice connection error: {str(e)}")
+
+                # Verify voice client health
+                voice_client = member.guild.voice_client
+                if voice_client:
+                    # Check websocket health
+                    if hasattr(voice_client, 'ws') and voice_client.ws:
+                        if voice_client.ws.closed:
+                            voice_logger.warning("Voice websocket closed, attempting to reconnect")
                             try:
                                 await voice_client.disconnect(force=True)
-                            except:
-                                pass
-                            self.shared_voice_client = None
-                else:
-                    voice_logger.info("Bot left voice channel")
-                    if self.shared_voice_client:
+                                await asyncio.sleep(1)
+                                if after.channel:
+                                    await after.channel.connect(
+                                        timeout=Config.VOICE_TIMEOUT,
+                                        reconnect=True,
+                                        self_deaf=False,
+                                        self_mute=False
+                                    )
+                            except Exception as e:
+                                voice_logger.error(f"Failed to reconnect: {str(e)}")
+                    
+                    # Check keep-alive
+                    if hasattr(voice_client, 'ws') and voice_client.ws and hasattr(voice_client.ws, '_keep_alive'):
+                        if not voice_client.ws._keep_alive.is_running():
+                            voice_logger.warning("Keep-alive not running, restarting")
+                            voice_client.ws._keep_alive.start()
+
+            except Exception as e:
+                voice_logger.error(f"Error handling voice state: {str(e)}")
+            
+            # Update shared voice client
+            voice_client = member.guild.voice_client
+            if voice_client:
+                try:
+                    # Wait for connection to stabilize
+                    await asyncio.sleep(2)
+                    
+                    # Verify connection is healthy
+                    if voice_client.is_connected():
+                        self.shared_voice_client = voice_client
+                        voice_logger.info("Voice connection verified and shared")
+                        
+                        # Ensure we're not deafened
+                        await asyncio.sleep(1)
+                        await member.guild.change_voice_state(
+                            channel=after.channel,
+                            self_deaf=False,
+                            self_mute=False
+                        )
+                    else:
+                        voice_logger.warning("Voice connection unstable, cleaning up")
                         try:
-                            await self.shared_voice_client.disconnect(force=True)
+                            await voice_client.disconnect(force=True)
                         except:
                             pass
                         self.shared_voice_client = None
+                except Exception as e:
+                    voice_logger.error(f"Voice connection error: {str(e)}")
+                    try:
+                        await voice_client.disconnect(force=True)
+                    except:
+                        pass
+                    self.shared_voice_client = None
+            else:
+                voice_logger.info("Bot left voice channel")
+                if self.shared_voice_client:
+                    try:
+                        await self.shared_voice_client.disconnect(force=True)
+                    except:
+                        pass
+                    self.shared_voice_client = None
                     
         except Exception as e:
             voice_logger.error(f"Error monitoring voice state: {str(e)}")
@@ -234,19 +257,19 @@ class ArabLifeBot(commands.Bot):
                     await interaction.response.send_message(error_message, ephemeral=True)
             except discord.NotFound:
                 # If we can't respond to the interaction, log it
-                print(f"Failed to respond to interaction: {error_message}")
+                logger.error(f"Failed to respond to interaction: {error_message}")
                 
         except Exception as e:
-            print(f"Error in error handler: {str(e)}")
+            logger.error(f"Error in error handler: {str(e)}")
 
     async def on_ready(self) -> None:
         """Event triggered when the bot is ready"""
-        print('='*50)
-        print('             ARABLIFE BOT IS UP')
-        print('='*50)
-        print(f'Logged in as: {self.user.name}')
-        print(f'Bot ID: {self.user.id}')
-        print(f'Start Time: {discord.utils.utcnow().strftime("%Y-%m-%d %H:%M:%S UTC")}')
+        logger.info('='*50)
+        logger.info('             ARABLIFE BOT IS UP')
+        logger.info('='*50)
+        logger.info(f'Logged in as: {self.user.name}')
+        logger.info(f'Bot ID: {self.user.id}')
+        logger.info(f'Start Time: {discord.utils.utcnow().strftime("%Y-%m-%d %H:%M:%S UTC")}')
         
         # Set the default status when the bot starts
         activity = discord.Activity(type=discord.ActivityType.watching, name="ArabLife")
@@ -257,14 +280,15 @@ class ArabLifeBot(commands.Bot):
             guild = discord.Object(id=Config.GUILD_ID)
             self.tree.copy_global_to(guild=guild)
             await self.tree.sync(guild=guild)
-            print('Successfully synced application commands')
+            logger.info('Successfully synced application commands')
         except Exception as e:
-            print(f'Failed to sync commands: {str(e)}')
+            logger.error(f'Failed to sync commands: {str(e)}')
             
-        print('------')
+        logger.info('------')
         
-        # Set up logging with Discord channels
-        setup_logging(
+        # Update logger with bot instance
+        global logger
+        logger = setup_logging(
             self,
             error_log_channel=1327648816874262549,
             audit_log_channel=1286684861234417704
@@ -276,7 +300,7 @@ async def main():
     try:
         Config.validate_config()
     except ValueError as e:
-        print(f"Configuration error: {str(e)}")
+        logger.error(f"Configuration error: {str(e)}")
         return
 
     # Create and run bot
@@ -284,7 +308,7 @@ async def main():
         async with ArabLifeBot() as bot:
             await bot.start(Config.TOKEN)
     except Exception as e:
-        print(f"Failed to start bot: {str(e)}")
+        logger.error(f"Failed to start bot: {str(e)}")
 
 # Run the bot
 if __name__ == "__main__":
@@ -292,6 +316,6 @@ if __name__ == "__main__":
         import asyncio
         asyncio.run(main())
     except KeyboardInterrupt:
-        print("Bot stopped by user")
+        logger.info("Bot stopped by user")
     except Exception as e:
-        print(f"Fatal error: {str(e)}")
+        logger.critical(f"Fatal error: {str(e)}")
